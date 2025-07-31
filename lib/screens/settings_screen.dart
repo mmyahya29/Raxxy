@@ -18,7 +18,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.read(firebaseAuthProvider);
-    final userEmail = auth.currentUser?.email ?? 'No email';
+    final username = auth.currentUser?.displayName ?? 'No Name';
 
     return Scaffold(
       appBar: AppBar(
@@ -40,7 +40,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Center(child: Icon(Icons.person_rounded, size: 140.r, color: Color(0xffb2b0ff),),),
               ),
               SizedBox(height: 5.h,),
-              Text(userEmail, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w600),),
+              Text(username, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w600),),
               SizedBox(height: 10.h,),
               SizedBox(
                 height: 50.h,

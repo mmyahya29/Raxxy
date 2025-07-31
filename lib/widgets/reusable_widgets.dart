@@ -51,21 +51,3 @@ Widget buildButton(String text, VoidCallback onPressed, String? image, {Color co
     ),
   );
 }
-
-void _showMyDialog(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text("Starting to Drive?"),
-      content: const Text("Make sure to set your device on the dashboard of your car or on a phone stand of your Bike"),
-      actions: [
-        ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).pop(); // Close dialog
-          },
-          child: const Text("OK"),
-        ),
-      ],
-    ),
-  );
-}

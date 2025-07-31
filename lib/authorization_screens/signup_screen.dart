@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:raxxy/providers/provider.dart';
 
+import '../main.dart';
 import '../widgets/reusable_widgets.dart';
 import 'login_screen.dart';
 
@@ -16,6 +17,8 @@ class SignupScreen extends ConsumerStatefulWidget {
 }
 
 class _SignupScreenState extends ConsumerState<SignupScreen> {
+
+  final nameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
@@ -23,23 +26,34 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   Future<void> signup() async {
     final auth = ref.read(firebaseAuthProvider);
+    final name = nameController.text.trim();
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
     try {
       await auth.createUserWithEmailAndPassword(email: email, password: password);
       final user = auth.currentUser;
+
       if (user != null) {
+        await user.updateDisplayName(name);
+        await user.reload();
+
+        // Save to Firestore
         await firestore.collection('users').doc(user.uid).set({
           'email': user.email,
-          'name': user.displayName ?? '',
+          'name': name,
           'createdAt': FieldValue.serverTimestamp(),
         });
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MyApp()),
+        );
       }
     } catch (e) {
       showError(e.toString());
     }
   }
+
 
   void showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message')));
@@ -57,16 +71,19 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               SizedBox(height: 100.h),
               Text('Sign Up', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 26.sp)),
               SizedBox(height: 40.h),
+              buildTextField(nameController, 'Name'),
+              SizedBox(height: 10.h),
               buildTextField(emailController, 'Email'),
               SizedBox(height: 10.h),
               buildTextField(passwordController, 'Password', obscure: true),
               SizedBox(height: 20.h),
               buildButton('Sign Up', signup, null),
+              SizedBox(height: 10.h),
               TextButton(
                 onPressed: () {
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    MaterialPageRoute(builder: (_) => const MyApp()),
                   );
                 },
                 child: const Text('Have an account? Login'),
