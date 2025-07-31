@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "21788102904",
+    "project_id": "raxxy-6ffec",
+    "storage_bucket": "raxxy-6ffec.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:21788102904:android:3327d6d94c8208697aeb0d",
+        "android_client_info": {
+          "package_name": "com.example.raxxy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDsZzty2zMyTjRPekT1sUaHs1-ww_Ib0lg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
