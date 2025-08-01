@@ -2,12 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import '../providers/provider.dart';
 import '../services/vehicle_monitor_service.dart';
 import 'add_vehicle.dart';
 
 class HomePage extends ConsumerStatefulWidget {
-  const HomePage({super.key});
+  final PersistentTabController controller;
+  const HomePage({super.key, required this.controller});
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
@@ -67,8 +69,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                           margin: EdgeInsets.symmetric(vertical: 8.h),
                           padding: EdgeInsets.all(12.w),
                           decoration: BoxDecoration(
-                            color: Color(0xff7a7a7a),
-                            borderRadius: BorderRadius.circular(30.r),
+                            color: Color(0xff202020),
+                            borderRadius: BorderRadius.circular(20.r),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,7 +142,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                   context: context,
                                                   builder: (ctx) => AlertDialog(
                                                     title: const Text("Starting to drive?"),
-                                                    content: const Text("Make sure to set your device on the dashboard of your car or on a phone stand of your Bike for better accuracy, Otherwise you might experience false monitoring..."),
+                                                    content: const Text("Make sure to set your device on the dashboard of your car or on a phone stand of your Bike for better accuracy, Otherwise you might experience crappy monitoring..."),
                                                     actions: [
                                                       ElevatedButton(
                                                         onPressed: () => Navigator.of(ctx).pop(true),

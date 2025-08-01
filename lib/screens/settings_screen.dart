@@ -2,10 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import '../providers/provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({super.key});
+  final PersistentTabController controller;
+  const SettingsScreen({super.key, required this.controller});
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -31,17 +33,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               SizedBox(height: 10.h,),
               Container(
-                height: 140.h,
-                width: 160.w,
+                height: 80.h,
+                width: MediaQuery.of(context).size.width-40,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(300.r),
-                  color: Color(0xff7c7c7c)
+                  borderRadius: BorderRadius.circular(30.r),
+                  color: Color(0xff202020)
                 ),
-                child: Center(child: Icon(Icons.person_rounded, size: 140.r, color: Color(0xffb2b0ff),),),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.person_rounded, size: 80.r, color: Color(0xffb2b0ff),),
+                    SizedBox(width: 5.w,),
+                    Text(username, style: TextStyle(fontSize: 26.sp, fontWeight: FontWeight.w600),),
+                    SizedBox(width: 60.w,)
+                  ],
+                ),
               ),
-              SizedBox(height: 5.h,),
-              Text(username, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w600),),
-              SizedBox(height: 10.h,),
+              SizedBox(height: 20.h,),
               SizedBox(
                 height: 50.h,
                 width: MediaQuery.of(context).size.width - 40,
@@ -50,7 +58,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     await auth.signOut();
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xffb2b0ff),
+                    backgroundColor: const Color(0xffb10000),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20.0),
                     ),
@@ -63,11 +71,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         style: TextStyle(
                           fontSize: 20.sp,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xffff0000),
+                          color: Color(0xffffffff),
                         ),
                       ),
                       SizedBox(width: 10.w),
-                      Icon(Icons.logout_rounded, size: 30.r, color: Color(0xffff0000)),
+                      Icon(Icons.logout_rounded, size: 30.r, color: Color(
+                          0xffffffff)),
                     ],
                   ),
                 ),

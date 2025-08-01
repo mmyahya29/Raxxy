@@ -22,9 +22,9 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
 
   List<Widget> _buildScreens() {
     return [
-      const DashboardScreen(),
-      const HomePage(),
-      const SettingsScreen(),
+      DashboardScreen(controller: _controller),
+      HomePage(controller: _controller,),
+      SettingsScreen(controller: _controller,),
     ];
   }
 

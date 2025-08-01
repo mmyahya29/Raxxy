@@ -83,20 +83,22 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
       appBar: AppBar(title: Text('Add Vehicle')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            buildDropdown('Type', ['Car', 'Bike'], selectedType),
-            SizedBox(height: 10.h),
-            buildTextField(makeController, 'Make'),
-            SizedBox(height: 10.h),
-            buildTextField(modelController, 'Model'),
-            SizedBox(height: 10.h),
-            buildTextField(yearController, 'Year', inputType: TextInputType.number),
-            SizedBox(height: 10.h),
-            buildTextField(mileageController, 'Current Mileage', inputType: TextInputType.number),
-            SizedBox(height: 20.h),
-            buildSaveButton(),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              buildDropdown('Type', ['Car', 'Bike'], selectedType),
+              SizedBox(height: 10.h),
+              buildTextField(makeController, 'Make'),
+              SizedBox(height: 10.h),
+              buildTextField(modelController, 'Model'),
+              SizedBox(height: 10.h),
+              buildTextField(yearController, 'Year', inputType: TextInputType.number),
+              SizedBox(height: 10.h),
+              buildTextField(mileageController, 'Current Mileage', inputType: TextInputType.number),
+              SizedBox(height: 20.h),
+              buildSaveButton(),
+            ],
+          ),
         ),
       ),
     );
