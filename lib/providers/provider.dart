@@ -24,6 +24,8 @@ final firestoreProvider = Provider((ref) => FirebaseFirestore.instance);
 class VehicleMonitorNotifier extends StateNotifier<VehicleMonitorState> {
   VehicleMonitorNotifier() : super(VehicleMonitorState());
 
+  static const int _maxHistoryLength = 20;
+
   void setVehicle(String? id) {
     state = state.copyWith(vehicleId: id);
   }
@@ -37,11 +39,29 @@ class VehicleMonitorNotifier extends StateNotifier<VehicleMonitorState> {
   }
 
   void updateSpeed(double speed) {
-    state = state.copyWith(speed: speed);
+    final updatedSpeedHistory = List<double>.from(state.speedHistory)
+      ..add(speed);
+    if (updatedSpeedHistory.length > _maxHistoryLength) {
+      updatedSpeedHistory.removeAt(0); // remove oldest
+    }
+
+    state = state.copyWith(
+      speed: speed,
+      speedHistory: updatedSpeedHistory,
+    );
   }
 
   void updateAcceleration(double acceleration) {
-    state = state.copyWith(acceleration: acceleration);
+    final updatedAccelerationHistory = List<double>.from(state.accelerationHistory)
+      ..add(acceleration);
+    if (updatedAccelerationHistory.length > _maxHistoryLength) {
+      updatedAccelerationHistory.removeAt(0);
+    }
+
+    state = state.copyWith(
+      acceleration: acceleration,
+      accelerationHistory: updatedAccelerationHistory,
+    );
   }
 
   void updateDistance(double distance) {
@@ -52,6 +72,7 @@ class VehicleMonitorNotifier extends StateNotifier<VehicleMonitorState> {
     state = VehicleMonitorState();
   }
 }
+
 
 final vehicleMonitorProvider = StateNotifierProvider<VehicleMonitorNotifier, VehicleMonitorState>(
       (ref) => VehicleMonitorNotifier(),

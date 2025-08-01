@@ -6,6 +6,9 @@ class VehicleMonitorState {
   final double acceleration;
   final double distance;
 
+  final List<double> speedHistory;
+  final List<double> accelerationHistory;
+
   VehicleMonitorState({
     this.vehicleId,
     this.make,
@@ -13,6 +16,8 @@ class VehicleMonitorState {
     this.speed = 0.0,
     this.acceleration = 0.0,
     this.distance = 0.0,
+    this.speedHistory = const [],
+    this.accelerationHistory = const [],
   });
 
   VehicleMonitorState copyWith({
@@ -22,6 +27,8 @@ class VehicleMonitorState {
     double? speed,
     double? acceleration,
     double? distance,
+    List<double>? speedHistory,
+    List<double>? accelerationHistory,
   }) {
     return VehicleMonitorState(
       vehicleId: vehicleId ?? this.vehicleId,
@@ -30,6 +37,8 @@ class VehicleMonitorState {
       speed: speed ?? this.speed,
       acceleration: acceleration ?? this.acceleration,
       distance: distance ?? this.distance,
+      speedHistory: speedHistory ?? this.speedHistory,
+      accelerationHistory: accelerationHistory ?? this.accelerationHistory,
     );
   }
 }
