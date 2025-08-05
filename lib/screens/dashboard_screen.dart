@@ -98,95 +98,99 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   borderRadius: BorderRadius.circular(30.r),
                 ),
                 padding: EdgeInsets.all(16.r),
-                child: Consumer(
-                  builder: (context, ref, _) {
-                    final monitor = ref.watch(vehicleMonitorProvider);
-                    final speedData = monitor.speedHistory;
-                    final accData = monitor.accelerationHistory;
-
-                    if (speedData.isEmpty && accData.isEmpty) {
-                      return const Center(child: Text("No speed or acceleration data yet", style: TextStyle(color: Colors.white)));
-                    }
-
-                    final maxY = [
-                      ...speedData,
-                      ...accData,
-                    ].fold<double>(0.0, (prev, val) => val > prev ? val : prev);
-
-                    return LineChart(
-                      LineChartData(
-                        minX: 0,
-                        maxX: (speedData.length > accData.length ? speedData.length : accData.length).toDouble() - 1,
-                        minY: 0,
-                        maxY: (maxY + 5).clamp(0, 100), // Prevent overflow
-
-                        titlesData: FlTitlesData(
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 40,
-                              interval: 10,
-                              getTitlesWidget: (value, _) => Text('${value.toInt()}', style: TextStyle(color: Colors.white, fontSize: 10.sp)),
-                            ),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              interval: 1,
-                              getTitlesWidget: (value, _) => Text('${value.toInt()}', style: TextStyle(color: Colors.white, fontSize: 10.sp)),
-                            ),
-                          ),
-                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        ),
-
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: true,
-                          horizontalInterval: 10,
-                          verticalInterval: 1,
-                          getDrawingHorizontalLine: (_) => FlLine(color: Colors.white12, strokeWidth: 1),
-                          getDrawingVerticalLine: (_) => FlLine(color: Colors.white12, strokeWidth: 1),
-                        ),
-
-                        borderData: FlBorderData(
-                          show: true,
-                          border: Border.all(color: Colors.white24, width: 1),
-                        ),
-
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: List.generate(
-                              speedData.length,
-                                  (i) => FlSpot(i.toDouble(), speedData[i]),
-                            ),
-                            isCurved: true,
-                            color: Colors.greenAccent,
-                            barWidth: 2,
-                            dotData: FlDotData(show: false),
-                            belowBarData: BarAreaData(show: false),
-                          ),
-                          LineChartBarData(
-                            spots: List.generate(
-                              accData.length,
-                                  (i) => FlSpot(i.toDouble(), accData[i]),
-                            ),
-                            isCurved: true,
-                            color: Colors.redAccent,
-                            barWidth: 2,
-                            dotData: FlDotData(show: false),
-                            belowBarData: BarAreaData(show: false),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                child: MetricsGraph(),
               )
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget MetricsGraph(){
+    return Consumer(
+      builder: (context, ref, _) {
+        final monitor = ref.watch(vehicleMonitorProvider);
+        final speedData = monitor.speedHistory;
+        final accData = monitor.accelerationHistory;
+
+        if (speedData.isEmpty && accData.isEmpty) {
+          return const Center(child: Text("No speed or acceleration data yet", style: TextStyle(color: Colors.white)));
+        }
+
+        final maxY = [
+          ...speedData,
+          ...accData,
+        ].fold<double>(0.0, (prev, val) => val > prev ? val : prev);
+
+        return LineChart(
+          LineChartData(
+            minX: 0,
+            maxX: (speedData.length > accData.length ? speedData.length : accData.length).toDouble() - 1,
+            minY: 0,
+            maxY: (maxY + 5).clamp(0, 100), // Prevent overflow
+
+            titlesData: FlTitlesData(
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 40,
+                  interval: 10,
+                  getTitlesWidget: (value, _) => Text('${value.toInt()}', style: TextStyle(color: Colors.white, fontSize: 10.sp)),
+                ),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  interval: 1,
+                  getTitlesWidget: (value, _) => Text('${value.toInt()}', style: TextStyle(color: Colors.white, fontSize: 10.sp)),
+                ),
+              ),
+              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            ),
+
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: true,
+              horizontalInterval: 10,
+              verticalInterval: 1,
+              getDrawingHorizontalLine: (_) => FlLine(color: Colors.white12, strokeWidth: 1),
+              getDrawingVerticalLine: (_) => FlLine(color: Colors.white12, strokeWidth: 1),
+            ),
+
+            borderData: FlBorderData(
+              show: true,
+              border: Border.all(color: Colors.white24, width: 1),
+            ),
+
+            lineBarsData: [
+              LineChartBarData(
+                spots: List.generate(
+                  speedData.length,
+                      (i) => FlSpot(i.toDouble(), speedData[i]),
+                ),
+                isCurved: true,
+                color: Colors.greenAccent,
+                barWidth: 2,
+                dotData: FlDotData(show: false),
+                belowBarData: BarAreaData(show: false),
+              ),
+              LineChartBarData(
+                spots: List.generate(
+                  accData.length,
+                      (i) => FlSpot(i.toDouble(), accData[i]),
+                ),
+                isCurved: true,
+                color: Colors.redAccent,
+                barWidth: 2,
+                dotData: FlDotData(show: false),
+                belowBarData: BarAreaData(show: false),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
