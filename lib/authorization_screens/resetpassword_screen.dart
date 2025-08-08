@@ -3,33 +3,37 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:raxxy/authorization_screens/resetpassword_screen.dart';
 import 'package:raxxy/authorization_screens/signup_screen.dart';
+import 'package:raxxy/main.dart';
 import 'package:raxxy/providers/provider.dart';
 
 import '../widgets/reusable_widgets.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+class ResetPasswordScreen extends ConsumerStatefulWidget {
+  const ResetPasswordScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final emailController = TextEditingController();
-  final passwordController = TextEditingController();
 
   final auth = FirebaseAuth.instance;
   final firestore = FirebaseFirestore.instance;
 
-  Future<void> authenticate() async {
+  Future<void> resetPassword() async {
     final auth = ref.read(firebaseAuthProvider);
     final email = emailController.text.trim();
-    final password = passwordController.text.trim();
+
+    if (email.isEmpty) {
+      showError('Please enter your email to reset password');
+      return;
+    }
 
     try {
-      await auth.signInWithEmailAndPassword(email: email, password: password);
+      await auth.sendPasswordResetEmail(email: email);
+      showMessage('Password reset email sent.');
     } catch (e) {
       showError(e.toString());
     }
@@ -64,30 +68,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             SizedBox(height: 40.h),
             buildTextField(emailController, 'Email'),
-            SizedBox(height: 10.h),
-            buildTextField(passwordController, 'Password', obscure: true),
             SizedBox(height: 20.h),
-            buildButton('Login', authenticate, null),
+            buildButton('Reset', resetPassword, null),
             SizedBox(height: 10.h),
             TextButton(
               onPressed: () {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => const SignupScreen()),
+                  MaterialPageRoute(builder: (_) => MyApp()),
                 );
               },
-              child: Text('No account? Sign Up'),
+              child: Text('Back to Login'),
             ),
-            TextButton(
-              onPressed: (){
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => ResetPasswordScreen()),
-                );
-              },
-              child: const Text('Forgot Password?'),
-            ),
-            SizedBox(height: 20.h),
           ],
         ),
       ),
