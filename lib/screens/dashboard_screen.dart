@@ -32,73 +32,107 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 'Currently Active Vehicle',
                 style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w800),
               ),
-              SizedBox(height: 10.h),
-              InkWell(
-                onTap: (){
-                  widget.controller.jumpToTab(1);
-                },
-                child: Container(
-                  height: 120.h,
-                  width: MediaQuery.of(context).size.width - 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xff007e0f),
-                    borderRadius: BorderRadius.circular(30.r),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                  child: Consumer(
-                    builder: (context, ref, _) {
-                      final monitor = ref.watch(vehicleMonitorProvider);
-
-                      if (monitor.vehicleId == null) {
-                        return Center(
-                          child: Text(
-                            'No currently active Vehicle',
-                            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w300),
-                          ),
-                        );
-                      }
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '${monitor.make ?? "Vehicle"} ${monitor.model ?? ""}',
-                            style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
-                          ),
-                          SizedBox(height: 8.h),
-                          Text(
-                            'Speed: ${monitor.speed.toStringAsFixed(2)} km/h',
-                            style: TextStyle(fontSize: 16.sp),
-                          ),
-                          Text(
-                            'Acceleration: ${monitor.acceleration.toStringAsFixed(2)} m/s²',
-                            style: TextStyle(fontSize: 16.sp),
-                          ),
-                          Text(
-                            'Distance: ${monitor.distance.toStringAsFixed(2)} m',
-                            style: TextStyle(fontSize: 16.sp),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-              SizedBox(height: 10.h),
-              Text(
-                'Performance Metrics',
-                style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w800),
-              ),
-              SizedBox(height: 10.h),
+              SizedBox(height: 5.h),
               Container(
-                height: 200.h,
+                height: 390.h,
                 width: MediaQuery.of(context).size.width - 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xff332d85),
+                  color: const Color(0xff292929),
                   borderRadius: BorderRadius.circular(30.r),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      spreadRadius: 3,
+                    ),
+                  ],
                 ),
-                padding: EdgeInsets.all(16.r),
-                child: MetricsGraph(),
+                child: Column(
+                  children: [
+                    SizedBox(height: 10.h),
+                    InkWell(
+                      onTap: (){
+                        widget.controller.jumpToTab(1);
+                      },
+                      child: Container(
+                        height: 120.h,
+                        width: MediaQuery.of(context).size.width - 60,
+                        decoration: BoxDecoration(
+                          color: const Color(0xff007e0f),
+                          borderRadius: BorderRadius.circular(30.r),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 4,
+                              spreadRadius: 3,
+                            ),
+                          ],
+                        ),
+                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                        child: Consumer(
+                          builder: (context, ref, _) {
+                            final monitor = ref.watch(vehicleMonitorProvider);
+
+                            if (monitor.vehicleId == null) {
+                              return Center(
+                                child: Text(
+                                  'No currently active Vehicle',
+                                  style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w300),
+                                ),
+                              );
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '${monitor.make ?? "Vehicle"} ${monitor.model ?? ""}',
+                                  style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
+                                ),
+                                SizedBox(height: 8.h),
+                                Text(
+                                  'Speed: ${monitor.speed.toStringAsFixed(2)} km/h',
+                                  style: TextStyle(fontSize: 16.sp),
+                                ),
+                                Text(
+                                  'Acceleration: ${monitor.acceleration.toStringAsFixed(2)} m/s²',
+                                  style: TextStyle(fontSize: 16.sp),
+                                ),
+                                Text(
+                                  'Distance: ${monitor.distance.toStringAsFixed(2)} m',
+                                  style: TextStyle(fontSize: 16.sp),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 10.h),
+                    Text(
+                      'Performance Metrics',
+                      style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
+                    ),
+                    SizedBox(height: 10.h),
+                    Container(
+                      height: 200.h,
+                      width: MediaQuery.of(context).size.width - 60,
+                      decoration: BoxDecoration(
+                        color: const Color(0xff332d85),
+                        borderRadius: BorderRadius.circular(30.r),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 4,
+                            spreadRadius: 3,
+                          ),
+                        ],
+                      ),
+                      padding: EdgeInsets.all(16.r),
+                      child: MetricsGraph(),
+                    ),
+                  ],
+                ),
               )
             ],
           ),

@@ -37,7 +37,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 width: MediaQuery.of(context).size.width-40,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(30.r),
-                  color: Color(0xff202020)
+                  color: Color(0xff202020),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      spreadRadius: 3,
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -50,9 +57,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
               SizedBox(height: 20.h,),
-              SizedBox(
+              Container(
                 height: 50.h,
                 width: MediaQuery.of(context).size.width - 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20.r),
+                  color: Color(0xff202020),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
                 child: ElevatedButton(
                   onPressed: () async {
                     await auth.signOut();
@@ -62,6 +80,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20.0),
                     ),
+
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,

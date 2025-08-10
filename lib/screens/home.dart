@@ -71,6 +71,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                           decoration: BoxDecoration(
                             color: Color(0xff202020),
                             borderRadius: BorderRadius.circular(20.r),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 4,
+                                spreadRadius: 3,
+                              ),
+                            ],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,

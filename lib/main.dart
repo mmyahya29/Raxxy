@@ -44,8 +44,8 @@ class MyApp extends ConsumerWidget {
               data:
                   (user) =>
                       user != null
-                          ? const PersistentNavWrapper()
-                          : const LoginScreen(),
+                          ? PersistentNavWrapper()
+                          : LoginScreen(),
               loading:
                   () => const Scaffold(
                     body: Center(child: CircularProgressIndicator()),
