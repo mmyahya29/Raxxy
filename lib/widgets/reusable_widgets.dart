@@ -25,6 +25,15 @@ Widget buildButton(String text, VoidCallback onPressed, String? image, {Color co
   return Container(
     height: 50.h,
     width: 260.w,
+    decoration: BoxDecoration(
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.3),
+          blurRadius: 4,
+          spreadRadius: 3,
+        ),
+      ],
+    ),
     child: ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(

@@ -17,8 +17,6 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
-    final auth = ref.read(firebaseAuthProvider);
-    final userEmail = auth.currentUser?.email ?? 'No email';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
@@ -138,6 +136,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ),
       ),
+    );
+  }
+  Widget CurrentMonitor(){
+    return Consumer(
+      builder: (context, ref, _) {
+        final monitor = ref.watch(vehicleMonitorProvider);
+
+        if (monitor.vehicleId == null) {
+          return Center(
+            child: Text(
+              'No currently active Vehicle',
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w300),
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '${monitor.make ?? "Vehicle"} ${monitor.model ?? ""}',
+              style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              'Speed: ${monitor.speed.toStringAsFixed(2)} km/h',
+              style: TextStyle(fontSize: 16.sp),
+            ),
+            Text(
+              'Acceleration: ${monitor.acceleration.toStringAsFixed(2)} m/s²',
+              style: TextStyle(fontSize: 16.sp),
+            ),
+            Text(
+              'Distance: ${monitor.distance.toStringAsFixed(2)} m',
+              style: TextStyle(fontSize: 16.sp),
+            ),
+          ],
+        );
+      },
     );
   }
 

@@ -195,9 +195,19 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
             SizedBox(height: 10.h),
-            SizedBox(
+            Container(
               height: 50.h,
               width: MediaQuery.of(context).size.width - 40,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.push(

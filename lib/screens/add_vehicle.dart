@@ -139,6 +139,13 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
       width: MediaQuery.of(context).size.width - 40,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 4,
+            spreadRadius: 3,
+          ),
+        ],
       ),
       child: ElevatedButton(
         onPressed: saveVehicle,
