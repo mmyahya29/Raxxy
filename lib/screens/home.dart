@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
+import 'package:raxxy/widgets/reusable_widgets.dart';
 import '../providers/provider.dart';
 import '../services/vehicle_monitor_service.dart';
 import 'add_vehicle.dart';
@@ -22,6 +23,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.read(firebaseAuthProvider);
+
+    final mileageController = TextEditingController();
 
     return Scaffold(
       appBar: AppBar(
@@ -126,13 +129,32 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                   .doc(vehicle.id)
                                                   .delete();
 
-                                              // If the deleted vehicle is being monitored, stop monitoring
                                               if (monitoringVehicleId == vehicle.id) {
-                                                VehicleMonitorService().stopMonitoring(ref);
-                                                monitoringVehicleId = null;
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (ctx) => AlertDialog(
+                                                    title: Text("Enter current mileage to cover up for hardware inaccuracies"),
+                                                    content: TextField(
+                                                    controller: mileageController,
+                                                    keyboardType: TextInputType.number,
+                                                    decoration: const InputDecoration(
+                                                      hintText: "Enter mileage",
+                                                    ),
+                                                  ),
+                                                    actions: [
+                                                      ElevatedButton(
+                                                        onPressed: () {
+                                                          VehicleMonitorService().stopMonitoring(ref);
+                                                          monitoringVehicleId = null;
+                                                          setState(() {});
+                                                          Navigator.of(ctx).pop(true);
+                                                        },
+                                                        child: const Text("Okay"),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
                                               }
-
-                                              setState(() {});
                                             },
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: Colors.red,
