@@ -164,8 +164,30 @@ class _HomePageState extends ConsumerState<HomePage> {
                                           ElevatedButton(
                                             onPressed: () async {
                                               if (isMonitoring) {
-                                                VehicleMonitorService().stopMonitoring(ref);
-                                                monitoringVehicleId = null;
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (ctx) => AlertDialog(
+                                                    title: Text("Enter current mileage to cover up for hardware inaccuracies"),
+                                                    content: TextField(
+                                                      controller: mileageController,
+                                                      keyboardType: TextInputType.number,
+                                                      decoration: const InputDecoration(
+                                                        hintText: "Enter mileage",
+                                                      ),
+                                                    ),
+                                                    actions: [
+                                                      ElevatedButton(
+                                                        onPressed: () {
+                                                          VehicleMonitorService().stopMonitoring(ref);
+                                                          monitoringVehicleId = null;
+                                                          setState(() {});
+                                                          Navigator.of(ctx).pop(true);
+                                                        },
+                                                        child: const Text("Okay"),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
                                               } else {
                                                 showDialog(
                                                   context: context,
