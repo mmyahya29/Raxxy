@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:raxxy/providers/provider.dart';
 import 'package:raxxy/authorization_screens/login_screen.dart';
 import 'package:raxxy/firebase_options.dart';
+import 'package:raxxy/providers/theme_provider.dart';
 import 'package:raxxy/services/notifications_services.dart';
 import 'package:raxxy/services/vehicle_monitor_service.dart';
 
@@ -25,17 +26,28 @@ class MyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return ScreenUtilInit(
       designSize: const Size(360, 740),
       builder:
           (_, __) => MaterialApp(
+            themeMode: themeMode,
             theme: ThemeData(
+              brightness: Brightness.light,
+              scaffoldBackgroundColor: Colors.white,
+              primaryColor: Colors.blueGrey[50],
+              colorScheme: const ColorScheme.light(
+                primary: Colors.black,
+                secondary: Colors.teal,
+              ),
+            ),
+            darkTheme: ThemeData(
               brightness: Brightness.dark,
               scaffoldBackgroundColor: const Color(0xff434343),
               primaryColor: Colors.blueGrey[900],
-              colorScheme: ColorScheme.dark(
-                primary: Colors.blueAccent,
+              colorScheme: const ColorScheme.dark(
+                primary: Colors.white,
                 secondary: Colors.tealAccent,
               ),
             ),

@@ -5,9 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../providers/provider.dart';
 import 'notifications_services.dart';
@@ -32,8 +30,8 @@ class VehicleMonitorService {
 
   bool _isMonitoring = false;
 
-  final double accelerationThreshold = 2.6;
-  final double decelerationThreshold = -2.6;
+  final double accelerationThreshold = 2.4;
+  final double decelerationThreshold = -2.4;
 
   final List<double> _accelBuffer = [];
   final int _bufferSize = 10;

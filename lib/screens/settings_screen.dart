@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import '../providers/provider.dart';
+import '../providers/theme_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
@@ -21,6 +22,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final auth = ref.read(firebaseAuthProvider);
     final username = auth.currentUser?.displayName ?? 'No Name';
+    final themeMode = ref.watch(themeModeProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -37,7 +39,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 width: MediaQuery.of(context).size.width-40,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(30.r),
-                  color: Color(0xff202020),
+                  color: Theme.of(context).cardColor,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.3),
@@ -57,6 +59,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
               SizedBox(height: 20.h,),
+              Container(
+                height: 50.h,
+                width: MediaQuery.of(context).size.width - 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20.r),
+                  color: Theme.of(context).cardColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).cardColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20.r),
+                    ),
+
+                  ),
+                  onPressed: () {
+                    ref.read(themeModeProvider.notifier).state =
+                    themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+                  },
+                  child: Text(themeMode == ThemeMode.dark
+                      ? "Switch to Light Mode"
+                      : "Switch to Dark Mode",
+                    style: TextStyle(
+                      fontSize: 20.sp,
+                      fontWeight: FontWeight.w700,
+                    ),),
+                ),
+              ),
+              SizedBox(height: 10.h,),
               Container(
                 height: 50.h,
                 width: MediaQuery.of(context).size.width - 40,

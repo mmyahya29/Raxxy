@@ -1,10 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-Widget buildTextField(TextEditingController controller, String hint, {bool obscure = false, TextInputType inputType = TextInputType.text}) {
-  return SizedBox(
-    height: 60.h,
+Widget buildTextField(BuildContext context, TextEditingController controller, String hint, {bool obscure = false, TextInputType inputType = TextInputType.text}) {
+  return Container(
+    height: 50.h,
     width: 320.w,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20.r),
+      color: Theme.of(context).cardColor,
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.3),
+          blurRadius: 4,
+          spreadRadius: 3,
+        ),
+      ],
+    ),
     child: TextFormField(
       controller: controller,
       keyboardType: inputType,

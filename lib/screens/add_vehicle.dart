@@ -88,13 +88,13 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
             children: [
               buildDropdown('Type', ['Car', 'Bike'], selectedType),
               SizedBox(height: 10.h),
-              buildTextField(makeController, 'Make'),
+              buildTextField(context, makeController, 'Make'),
               SizedBox(height: 10.h),
-              buildTextField(modelController, 'Model'),
+              buildTextField(context, modelController, 'Model'),
               SizedBox(height: 10.h),
-              buildTextField(yearController, 'Year', inputType: TextInputType.number),
+              buildTextField(context, yearController, 'Year', inputType: TextInputType.number),
               SizedBox(height: 10.h),
-              buildTextField(mileageController, 'Current Mileage', inputType: TextInputType.number),
+              buildTextField(context, mileageController, 'Current Mileage', inputType: TextInputType.number),
               SizedBox(height: 20.h),
               buildSaveButton(),
             ],
@@ -105,9 +105,20 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
   }
 
   Widget buildDropdown(String hint, List item, String? seltype) {
-    return SizedBox(
-      height: 60.h,
+    return Container(
+      height: 50.h,
       width: 320.w,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20.r),
+        color: Theme.of(context).cardColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 4,
+            spreadRadius: 3,
+          ),
+        ],
+      ),
       child: DropdownButtonFormField<String>(
         value: seltype,
         items: item.map((type) {

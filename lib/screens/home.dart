@@ -72,7 +72,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           margin: EdgeInsets.symmetric(vertical: 8.h),
                           padding: EdgeInsets.all(12.w),
                           decoration: BoxDecoration(
-                            color: Color(0xff202020),
+                            color: Theme.of(context).cardColor,
                             borderRadius: BorderRadius.circular(20.r),
                             boxShadow: [
                               BoxShadow(

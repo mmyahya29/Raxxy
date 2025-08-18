@@ -35,7 +35,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 height: 390.h,
                 width: MediaQuery.of(context).size.width - 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xff292929),
+                  color: Theme.of(context).cardColor,
                   borderRadius: BorderRadius.circular(30.r),
                   boxShadow: [
                     BoxShadow(
@@ -75,7 +75,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               return Center(
                                 child: Text(
                                   'No currently active Vehicle',
-                                  style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w300),
+                                  style: TextStyle(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.w300),
                                 ),
                               );
                             }
