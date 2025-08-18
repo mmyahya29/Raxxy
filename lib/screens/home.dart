@@ -144,7 +144,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                     actions: [
                                                       ElevatedButton(
                                                         onPressed: () {
-                                                          VehicleMonitorService().stopMonitoring(ref);
+                                                          VehicleMonitorService().stopMonitoring(ref, double.parse(mileageController.text.trim()));
                                                           monitoringVehicleId = null;
                                                           setState(() {});
                                                           Navigator.of(ctx).pop(true);
@@ -178,7 +178,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                     actions: [
                                                       ElevatedButton(
                                                         onPressed: () {
-                                                          VehicleMonitorService().stopMonitoring(ref);
+                                                          VehicleMonitorService().stopMonitoring(ref, double.parse(mileageController.text.trim()));
                                                           monitoringVehicleId = null;
                                                           setState(() {});
                                                           Navigator.of(ctx).pop(true);

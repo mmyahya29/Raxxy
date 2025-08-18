@@ -26,6 +26,7 @@ Widget buildButton(String text, VoidCallback onPressed, String? image, {Color co
     height: 50.h,
     width: 260.w,
     decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20.r),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withOpacity(0.3),

@@ -140,12 +140,16 @@ class VehicleMonitorService {
     print('Mileage updated: +${distanceKm.toStringAsFixed(2)} km');
   }
 
-  void stopMonitoring(WidgetRef ref) {
+  void stopMonitoring(WidgetRef ref, double distance) async {
     _accelSub?.cancel();
     _positionSub?.cancel();
     _lastPosition = null;
     totalDistanceMeters = 0.0;
     _isMonitoring = false;
+
+    final firestore = FirebaseFirestore.instance;
+    final docRef = firestore.collection('users').doc(_userId).collection('vehicles').doc(_vehicleId);
+    await docRef.update({'mileage': distance});
 
     ref.read(vehicleMonitorProvider.notifier).clear();
 
