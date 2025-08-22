@@ -22,7 +22,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final auth = ref.read(firebaseAuthProvider);
     final username = auth.currentUser?.displayName ?? 'No Name';
-    final themeMode = ref.watch(themeModeProvider);
+    final themeMode = ref.watch(themeNotifierProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -82,8 +82,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                   ),
                   onPressed: () {
-                    ref.read(themeModeProvider.notifier).state =
-                    themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+                    ref.read(themeNotifierProvider.notifier).toggleTheme();
                   },
                   child: Text(themeMode == ThemeMode.dark
                       ? "Switch to Light Mode"

@@ -59,7 +59,7 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
       screens: _buildScreens(),
       items: _navBarsItems(),
       confineToSafeArea: true,
-      backgroundColor: Theme.of(context).cardColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       navBarStyle: NavBarStyle.style1,
     );
   }

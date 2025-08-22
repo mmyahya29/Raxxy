@@ -26,7 +26,7 @@ class MyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
-    final themeMode = ref.watch(themeModeProvider);
+    final themeMode = ref.watch(themeNotifierProvider);
 
     return ScreenUtilInit(
       designSize: const Size(360, 740),

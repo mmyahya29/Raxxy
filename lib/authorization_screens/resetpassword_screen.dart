@@ -78,7 +78,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                   MaterialPageRoute(builder: (_) => MyApp()),
                 );
               },
-              child: Text('Back to Login'),
+              child: Text('Back to Login',style: TextStyle(color: Colors.blueAccent)),
             ),
           ],
         ),

@@ -18,6 +18,7 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
   final modelController = TextEditingController();
   final yearController = TextEditingController();
   final mileageController = TextEditingController();
+  final lastOilController = TextEditingController();
 
   Future<void> addVehicleForUser({
     required WidgetRef ref,
@@ -26,6 +27,7 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
     required String model,
     required int year,
     required int mileage,
+    required int engineOil,
   }) async {
     final auth = ref.read(firebaseAuthProvider);
     final firestore = ref.read(firestoreProvider);
@@ -43,6 +45,7 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
       'model': model,
       'year': year,
       'mileage': mileage,
+      'engineOil': engineOil,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
@@ -63,6 +66,7 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
         model: modelController.text.trim(),
         year: int.parse(yearController.text.trim()),
         mileage: int.parse(mileageController.text.trim()),
+        engineOil: int.parse(lastOilController.text.trim()),
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -95,6 +99,8 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
               buildTextField(context, yearController, 'Year', inputType: TextInputType.number),
               SizedBox(height: 10.h),
               buildTextField(context, mileageController, 'Current Mileage', inputType: TextInputType.number),
+              SizedBox(height: 10.h),
+              buildTextField(context, lastOilController, 'Last Engine Oil Change at...', inputType: TextInputType.number),
               SizedBox(height: 20.h),
               buildSaveButton(),
             ],

@@ -51,9 +51,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget buildAuth() {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: SingleChildScrollView(
+    return SingleChildScrollView(
+      child: Padding(
+        padding:  EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -76,7 +76,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   MaterialPageRoute(builder: (_) => const SignupScreen()),
                 );
               },
-              child: Text('No account? Sign Up'),
+              child: Text('No account? Sign Up', style: TextStyle(color: Colors.blueAccent)),
             ),
             TextButton(
               onPressed: (){
@@ -85,7 +85,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   MaterialPageRoute(builder: (_) => ResetPasswordScreen()),
                 );
               },
-              child: const Text('Forgot Password?'),
+              child: const Text('Forgot Password?',style: TextStyle(color: Colors.blueAccent)),
             ),
             SizedBox(height: 20.h),
           ],

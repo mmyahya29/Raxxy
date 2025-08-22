@@ -86,7 +86,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     MaterialPageRoute(builder: (_) => const MyApp()),
                   );
                 },
-                child: const Text('Have an account? Login'),
+                child: const Text('Have an account? Login',style: TextStyle(color: Colors.blueAccent)),
               ),
               SizedBox(height: 20.h),
             ],
