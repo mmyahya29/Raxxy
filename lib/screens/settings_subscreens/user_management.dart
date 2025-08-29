@@ -26,6 +26,23 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
         child: SingleChildScrollView(
           child: Column(
             children: [
+              SizedBox(height: 20.h,),
+              Container(
+                height: 100.h,
+                width: 100.w,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(100.r),
+                  color: Theme.of(context).cardColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
+                child: Icon(Icons.person, size: 40.r,color: Color(0xffb2b0ff),),
+              ),
               SizedBox(height: 10.h,),
               Container(
                 height: 50.h,
