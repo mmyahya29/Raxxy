@@ -27,23 +27,23 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
           child: Column(
             children: [
               SizedBox(height: 20.h,),
-              Container(
-                height: 100.h,
-                width: 100.w,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(100.r),
-                  color: Theme.of(context).cardColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 4,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-                child: Icon(Icons.person, size: 40.r,color: Color(0xffb2b0ff),),
-              ),
-              SizedBox(height: 10.h,),
+              // Container(
+              //   height: 100.h,
+              //   width: 110.w,
+              //   decoration: BoxDecoration(
+              //     borderRadius: BorderRadius.circular(100.r),
+              //     color: Theme.of(context).cardColor,
+              //     boxShadow: [
+              //       BoxShadow(
+              //         color: Colors.black.withOpacity(0.3),
+              //         blurRadius: 4,
+              //         spreadRadius: 3,
+              //       ),
+              //     ],
+              //   ),
+              //   child: Icon(Icons.camera_alt, size: 80.r,color: Color(0xffb2b0ff),),
+              // ),
+              // SizedBox(height: 20.h,),
               Container(
                 height: 50.h,
                 width: MediaQuery.of(context).size.width - 40,
@@ -72,7 +72,7 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.person, color: Colors.blueAccent, size: 40.r,),
+                      Icon(Icons.title, color: Color(0xffb2b0ff), size: 40.r,),
                       Text("  Change Name",
                         style: TextStyle(
                           fontSize: 20.sp,
@@ -111,7 +111,7 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.email, color: Colors.blueAccent, size: 40.r,),
+                      Icon(Icons.email, color: Color(0xffb2b0ff), size: 40.r,),
                       Text("  Change Email",
                         style: TextStyle(
                           fontSize: 20.sp,
@@ -150,7 +150,7 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.lock_reset, color: Colors.blueAccent, size: 40.r,),
+                      Icon(Icons.lock_reset, color: Color(0xffb2b0ff), size: 40.r,),
                       Text("  Change Password",
                         style: TextStyle(
                           fontSize: 20.sp,

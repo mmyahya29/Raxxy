@@ -135,12 +135,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                   builder: (ctx) => AlertDialog(
                                                     title: Text("Enter current mileage to cover up for hardware inaccuracies"),
                                                     content: TextField(
-                                                    controller: mileageController,
-                                                    keyboardType: TextInputType.number,
-                                                    decoration: const InputDecoration(
-                                                      hintText: "Enter mileage",
+                                                      controller: mileageController,
+                                                      keyboardType: TextInputType.number,
+                                                      decoration: const InputDecoration(
+                                                        hintText: "Enter mileage",
+                                                      ),
                                                     ),
-                                                  ),
                                                     actions: [
                                                       ElevatedButton(
                                                         onPressed: () {
@@ -203,11 +203,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                   ),
                                                 );
                                                 await VehicleMonitorService().startMonitoring(
-                                                  userId: auth.currentUser!.uid,
-                                                  vehicleId: vehicle.id,
-                                                  make: vehicle['make'],
-                                                  model: vehicle['model'],
-                                                  ref: ref
+                                                    userId: auth.currentUser!.uid,
+                                                    vehicleId: vehicle.id,
+                                                    make: vehicle['make'],
+                                                    model: vehicle['model'],
+                                                    ref: ref
                                                 );
                                                 monitoringVehicleId = vehicle.id;
                                               }

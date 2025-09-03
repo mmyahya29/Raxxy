@@ -100,39 +100,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),),
                 ),
               ),
-              SizedBox(height: 10.h,),
-              Container(
-                height: 50.h,
-                width: MediaQuery.of(context).size.width - 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20.r),
-                  color: Theme.of(context).cardColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 4,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).cardColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20.r),
-                    ),
-
-                  ),
-                  onPressed: () {
-
-                  },
-                  child: Text("Bleh",
-                    style: TextStyle(
-                      fontSize: 20.sp,
-                      fontWeight: FontWeight.w700,
-                    ),),
-                ),
-              ),
+              // SizedBox(height: 10.h,),
+              // Container(
+              //   height: 50.h,
+              //   width: MediaQuery.of(context).size.width - 40,
+              //   decoration: BoxDecoration(
+              //     borderRadius: BorderRadius.circular(20.r),
+              //     color: Theme.of(context).cardColor,
+              //     boxShadow: [
+              //       BoxShadow(
+              //         color: Colors.black.withOpacity(0.3),
+              //         blurRadius: 4,
+              //         spreadRadius: 3,
+              //       ),
+              //     ],
+              //   ),
+              //   child: ElevatedButton(
+              //     style: ElevatedButton.styleFrom(
+              //       backgroundColor: Theme.of(context).cardColor,
+              //       shape: RoundedRectangleBorder(
+              //         borderRadius: BorderRadius.circular(20.r),
+              //       ),
+              //
+              //     ),
+              //     onPressed: () {
+              //
+              //     },
+              //     child: Text("Bleh",
+              //       style: TextStyle(
+              //         fontSize: 20.sp,
+              //         fontWeight: FontWeight.w700,
+              //       ),),
+              //   ),
+              // ),
               SizedBox(height: 10.h,),
               Container(
                 height: 50.h,
