@@ -7,6 +7,7 @@ import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import 'package:raxxy/providers/vehicle_provider.dart';
 import '../providers/provider.dart';
 import '../services/maintenance_service.dart';
+import 'dashboard_subscreens/monitor_widget.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
@@ -19,8 +20,6 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
-
-    final auth = ref.read(firebaseAuthProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
@@ -35,107 +34,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w800),
               ),
               SizedBox(height: 5.h),
-              Container(
-                height: 390.h,
-                width: MediaQuery.of(context).size.width - 40,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(30.r),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 4,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    SizedBox(height: 10.h),
-                    InkWell(
-                      onTap: (){
-                        widget.controller.jumpToTab(1);
-                      },
-                      child: Container(
-                        height: 120.h,
-                        width: MediaQuery.of(context).size.width - 60,
-                        decoration: BoxDecoration(
-                          color: const Color(0xff007e0f),
-                          borderRadius: BorderRadius.circular(30.r),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 4,
-                              spreadRadius: 3,
-                            ),
-                          ],
-                        ),
-                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                        child: Consumer(
-                          builder: (context, ref, _) {
-                            final monitor = ref.watch(vehicleMonitorProvider);
-
-                            if (monitor.vehicleId == null) {
-                              return Center(
-                                child: Text(
-                                  'No currently active Vehicle',
-                                  style: TextStyle(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.w300),
-                                ),
-                              );
-                            }
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '${monitor.make ?? "Vehicle"} ${monitor.model ?? ""}',
-                                  style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
-                                ),
-                                SizedBox(height: 8.h),
-                                Text(
-                                  'Speed: ${monitor.speed.toStringAsFixed(2)} km/h',
-                                  style: TextStyle(fontSize: 16.sp),
-                                ),
-                                Text(
-                                  'Acceleration: ${monitor.acceleration.toStringAsFixed(2)} m/s²',
-                                  style: TextStyle(fontSize: 16.sp),
-                                ),
-                                Text(
-                                  'Distance: ${monitor.distance.toStringAsFixed(2)} m',
-                                  style: TextStyle(fontSize: 16.sp),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 10.h),
-                    Text(
-                      'Performance Metrics',
-                      style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
-                    ),
-                    SizedBox(height: 10.h),
-                    Container(
-                      height: 200.h,
-                      width: MediaQuery.of(context).size.width - 60,
-                      decoration: BoxDecoration(
-                        color: const Color(0xff332d85),
-                        borderRadius: BorderRadius.circular(30.r),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
-                            blurRadius: 4,
-                            spreadRadius: 3,
-                          ),
-                        ],
-                      ),
-                      padding: EdgeInsets.all(16.r),
-                      child: MetricsGraph(),
-                    ),
-                  ],
-                ),
-              ),
+              monitorWidget(context,widget),
               SizedBox(height: 10.h,),
               Text(
                 'Maintenance Logs',
@@ -171,12 +70,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                         for(int i=0;i<list.length;i++){
                           var v = list[i];
-                          final serv = MaintenanceService.getMaintenanceStatusForVehicle(
-                            vehicleName: '${v['make']} ${v['model']}',
-                            type: '${v['type']}',
-                            lastOilChange: (v['engineOil'] as num).toDouble(),
-                            currentMileage: (v['mileage'] as num).toDouble(),
-                          );
+                          final serv = MaintenanceService.getMaintenanceStatusForVehicle(vehicle: v);
                           services.addAll(serv);
                         }
 
@@ -195,34 +89,42 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 bgColor = Color(0xff44ac00);
                               }
 
-                              return Container(
-                                height: 80.h,
-                                width: MediaQuery
-                                    .of(context)
-                                    .size
-                                    .width - 60,
-                                decoration: BoxDecoration(
-                                  color: bgColor,
-                                  borderRadius: BorderRadius.circular(30.r),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text("${s["name"]}", style: TextStyle(
-                                        fontSize: 22.sp,
-                                        fontWeight: FontWeight.w900),),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              return Padding(
+                                padding: const EdgeInsets.fromLTRB(0,0,0,10).r,
+                                child: InkWell(
+                                //   onTap: () async {
+                                //     MaintenanceService().updateOilChange(v, ref, distance)
+                                // },
+                                  child: Container(
+                                    height: 80.h,
+                                    width: MediaQuery
+                                        .of(context)
+                                        .size
+                                        .width - 60,
+                                    decoration: BoxDecoration(
+                                      color: bgColor,
+                                      borderRadius: BorderRadius.circular(30.r),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        Text("${s["title"]}", style: TextStyle(
-                                            fontSize: 18.sp,
-                                            fontWeight: FontWeight.w500),),
-                                        Text("Remaining: ${s["remaining"].toStringAsFixed(2)} KM", style: TextStyle(
-                                            fontSize: 18.sp,
-                                            fontWeight: FontWeight.w500),)
+                                        Text("${s["name"]}", style: TextStyle(
+                                            fontSize: 22.sp,
+                                            fontWeight: FontWeight.w900),),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                          children: [
+                                            Text("${s["title"]}", style: TextStyle(
+                                                fontSize: 18.sp,
+                                                fontWeight: FontWeight.w500),),
+                                            Text("Remaining: ${s["remaining"].toStringAsFixed(2)} KM", style: TextStyle(
+                                                fontSize: 18.sp,
+                                                fontWeight: FontWeight.w500),)
+                                          ],
+                                        )
                                       ],
-                                    )
-                                  ],
+                                    ),
+                                  ),
                                 ),
                               );
                             },
@@ -241,132 +143,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ),
       ),
-    );
-  }
-  Widget CurrentMonitor(){
-    return Consumer(
-      builder: (context, ref, _) {
-        final monitor = ref.watch(vehicleMonitorProvider);
-
-        if (monitor.vehicleId == null) {
-          return Center(
-            child: Text(
-              'No currently active Vehicle',
-              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w300),
-            ),
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '${monitor.make ?? "Vehicle"} ${monitor.model ?? ""}',
-              style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
-            ),
-            SizedBox(height: 8.h),
-            Text(
-              'Speed: ${monitor.speed.toStringAsFixed(2)} km/h',
-              style: TextStyle(fontSize: 16.sp),
-            ),
-            Text(
-              'Acceleration: ${monitor.acceleration.toStringAsFixed(2)} m/s²',
-              style: TextStyle(fontSize: 16.sp),
-            ),
-            Text(
-              'Distance: ${monitor.distance.toStringAsFixed(2)} m',
-              style: TextStyle(fontSize: 16.sp),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget MetricsGraph(){
-    return Consumer(
-      builder: (context, ref, _) {
-        final monitor = ref.watch(vehicleMonitorProvider);
-        final speedData = monitor.speedHistory;
-        final accData = monitor.accelerationHistory;
-
-        if (speedData.isEmpty && accData.isEmpty) {
-          return const Center(child: Text("No speed or acceleration data yet", style: TextStyle(color: Colors.white)));
-        }
-
-        final maxY = [
-          ...speedData,
-          ...accData,
-        ].fold<double>(0.0, (prev, val) => val > prev ? val : prev);
-
-        return LineChart(
-          LineChartData(
-            minX: 0,
-            maxX: (speedData.length > accData.length ? speedData.length : accData.length).toDouble() - 1,
-            minY: 0,
-            maxY: (maxY + 5).clamp(0, 100), // Prevent overflow
-
-            titlesData: FlTitlesData(
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 40,
-                  interval: 10,
-                  getTitlesWidget: (value, _) => Text('${value.toInt()}', style: TextStyle(color: Colors.white, fontSize: 10.sp)),
-                ),
-              ),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  interval: 1,
-                  getTitlesWidget: (value, _) => Text('${value.toInt()}', style: TextStyle(color: Colors.white, fontSize: 10.sp)),
-                ),
-              ),
-              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            ),
-
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: true,
-              horizontalInterval: 10,
-              verticalInterval: 1,
-              getDrawingHorizontalLine: (_) => FlLine(color: Colors.white12, strokeWidth: 1),
-              getDrawingVerticalLine: (_) => FlLine(color: Colors.white12, strokeWidth: 1),
-            ),
-
-            borderData: FlBorderData(
-              show: true,
-              border: Border.all(color: Colors.white24, width: 1),
-            ),
-
-            lineBarsData: [
-              LineChartBarData(
-                spots: List.generate(
-                  speedData.length,
-                      (i) => FlSpot(i.toDouble(), speedData[i]),
-                ),
-                isCurved: true,
-                color: Colors.greenAccent,
-                barWidth: 2,
-                dotData: FlDotData(show: false),
-                belowBarData: BarAreaData(show: false),
-              ),
-              LineChartBarData(
-                spots: List.generate(
-                  accData.length,
-                      (i) => FlSpot(i.toDouble(), accData[i]),
-                ),
-                isCurved: true,
-                color: Colors.redAccent,
-                barWidth: 2,
-                dotData: FlDotData(show: false),
-                belowBarData: BarAreaData(show: false),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

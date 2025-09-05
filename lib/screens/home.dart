@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import 'package:raxxy/widgets/reusable_widgets.dart';
 import '../providers/provider.dart';
+import '../providers/vehicle_provider.dart';
 import '../services/vehicle_monitor_service.dart';
 import 'add_vehicle.dart';
 
@@ -35,205 +36,243 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: Column(
           children: [
             Expanded(
-              child: StreamBuilder(
-                stream: ref.read(firestoreProvider)
-                    .collection('users')
-                    .doc(auth.currentUser?.uid)
-                    .collection('vehicles')
-                    .orderBy('createdAt', descending: true)
-                    .snapshots(),
-                builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
-                  }
+              child: Consumer(
+                builder: (context, ref, _) {
+                  final vehiclesAsync = ref.watch(vehiclesProvider);
 
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return Center(child: Text('No current vehicles'));
-                  }
+                  return vehiclesAsync.when(
+                    data: (vehicles) {
+                      if (vehicles.isEmpty) {
+                        return const Center(child: Text('No current vehicles'));
+                      }
 
-                  final vehicles = snapshot.data!.docs;
+                      return ListView.builder(
+                        itemCount: vehicles.length,
+                        itemBuilder: (context, index) {
+                          final vehicle = vehicles[index];
+                          final isExpanded = expandedIndex == index;
+                          final isMonitoring = monitoringVehicleId == vehicle.id;
 
-                  return ListView.builder(
-                    itemCount: vehicles.length,
-                    itemBuilder: (context, index) {
-                      final vehicle = vehicles[index];
-                      final isExpanded = expandedIndex == index;
-                      final isMonitoring = monitoringVehicleId == vehicle.id;
-
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            expandedIndex = isExpanded ? null : index;
-                          });
-                        },
-                        child: AnimatedContainer(
-                          duration: Duration(milliseconds: 500),
-                          curve: Curves.easeInOut,
-                          margin: EdgeInsets.symmetric(vertical: 8.h),
-                          padding: EdgeInsets.all(12.w),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor,
-                            borderRadius: BorderRadius.circular(20.r),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 4,
-                                spreadRadius: 3,
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    (vehicle['type'] == 'car' || vehicle['type'] == 'Car')
-                                        ? Icons.directions_car_filled_rounded
-                                        : Icons.directions_bike_rounded,
-                                    size: 30.r,
-                                  ),
-                                  SizedBox(width: 16.w),
-                                  Text(
-                                    '${vehicle['make']} ${vehicle['model']}',
-                                    style: TextStyle(
-                                      fontSize: 20.sp,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                expandedIndex = isExpanded ? null : index;
+                              });
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 500),
+                              curve: Curves.easeInOut,
+                              margin: EdgeInsets.symmetric(vertical: 8.h),
+                              padding: EdgeInsets.all(12.w),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(20.r),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 4,
+                                    spreadRadius: 3,
                                   ),
                                 ],
                               ),
-                              AnimatedSize(
-                                duration: Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                                child: isExpanded
-                                    ? Padding(
-                                  padding: EdgeInsets.only(top: 10.h),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
-                                      SizedBox(height: 10.h),
-                                      Text('Type: ${vehicle['type']}'),
-                                      Text('Year: ${vehicle['year']}'),
-                                      Text('Mileage: ${vehicle['mileage'].toStringAsFixed(2)} km'),
-                                      SizedBox(height: 10.h),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                        children: [
-                                          ElevatedButton(
-                                            onPressed: () async {
-                                              await ref.read(firestoreProvider)
-                                                  .collection('users')
-                                                  .doc(auth.currentUser?.uid)
-                                                  .collection('vehicles')
-                                                  .doc(vehicle.id)
-                                                  .delete();
-
-                                              if (monitoringVehicleId == vehicle.id) {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (ctx) => AlertDialog(
-                                                    title: Text("Enter current mileage to cover up for hardware inaccuracies"),
-                                                    content: TextField(
-                                                      controller: mileageController,
-                                                      keyboardType: TextInputType.number,
-                                                      decoration: const InputDecoration(
-                                                        hintText: "Enter mileage",
-                                                      ),
-                                                    ),
-                                                    actions: [
-                                                      ElevatedButton(
-                                                        onPressed: () {
-                                                          VehicleMonitorService().stopMonitoring(ref, double.parse(mileageController.text.trim()));
-                                                          monitoringVehicleId = null;
-                                                          setState(() {});
-                                                          Navigator.of(ctx).pop(true);
-                                                        },
-                                                        child: const Text("Okay"),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                              }
-                                            },
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.red,
-                                            ),
-                                            child: Text('Delete', style: TextStyle(color: Colors.white)),
-                                          ),
-                                          ElevatedButton(
-                                            onPressed: () async {
-                                              if (isMonitoring) {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (ctx) => AlertDialog(
-                                                    title: Text("Enter current mileage to cover up for hardware inaccuracies"),
-                                                    content: TextField(
-                                                      controller: mileageController,
-                                                      keyboardType: TextInputType.number,
-                                                      decoration: const InputDecoration(
-                                                        hintText: "Enter mileage",
-                                                      ),
-                                                    ),
-                                                    actions: [
-                                                      ElevatedButton(
-                                                        onPressed: () {
-                                                          VehicleMonitorService().stopMonitoring(ref, double.parse(mileageController.text.trim()));
-                                                          monitoringVehicleId = null;
-                                                          setState(() {});
-                                                          Navigator.of(ctx).pop(true);
-                                                        },
-                                                        child: const Text("Okay"),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                              } else {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (ctx) => AlertDialog(
-                                                    title: const Text("Starting to drive?"),
-                                                    content: const Text("Make sure to set your device on the dashboard of your car or on a phone stand of your Bike for better accuracy, Otherwise you might experience crappy monitoring..."),
-                                                    actions: [
-                                                      ElevatedButton(
-                                                        onPressed: () => Navigator.of(ctx).pop(true),
-                                                        child: const Text("Okay"),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                                await VehicleMonitorService().startMonitoring(
-                                                    userId: auth.currentUser!.uid,
-                                                    vehicleId: vehicle.id,
-                                                    make: vehicle['make'],
-                                                    model: vehicle['model'],
-                                                    ref: ref
-                                                );
-                                                monitoringVehicleId = vehicle.id;
-                                              }
-                                              setState(() {});
-                                              setState(() {});
-                                            },
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: isMonitoring ? Colors.orange : Colors.green,
-                                            ),
-                                            child: Text(
-                                              isMonitoring ? 'Stop' : 'Start',
-                                              style: TextStyle(color: Colors.white),
-                                            ),
-                                          ),
-                                        ],
+                                      Icon(
+                                        (vehicle['type'] == 'car' || vehicle['type'] == 'Car')
+                                            ? Icons.directions_car_filled_rounded
+                                            : Icons.directions_bike_rounded,
+                                        size: 30.r,
+                                      ),
+                                      SizedBox(width: 16.w),
+                                      Text(
+                                        '${vehicle['make']} ${vehicle['model']}',
+                                        style: TextStyle(
+                                          fontSize: 20.sp,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ],
                                   ),
-                                )
-                                    : SizedBox.shrink(),
+                                  AnimatedSize(
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut,
+                                    child: isExpanded
+                                        ? Padding(
+                                      padding: EdgeInsets.only(top: 10.h),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          SizedBox(height: 10.h),
+                                          Text('Type: ${vehicle['type']}'),
+                                          Text('Year: ${vehicle['year']}'),
+                                          Text(
+                                            'Mileage: ${(vehicle['mileage'] as num).toDouble().toStringAsFixed(2)} km',
+                                          ),
+                                          SizedBox(height: 10.h),
+                                          Row(
+                                            mainAxisAlignment:
+                                            MainAxisAlignment.spaceEvenly,
+                                            children: [
+                                              ElevatedButton(
+                                                onPressed: () async {
+                                                  await ref
+                                                      .read(firestoreProvider)
+                                                      .collection('users')
+                                                      .doc(auth.currentUser?.uid)
+                                                      .collection('vehicles')
+                                                      .doc(vehicle.id)
+                                                      .delete();
+
+                                                  if (monitoringVehicleId ==
+                                                      vehicle.id) {
+                                                    showDialog(
+                                                      context: context,
+                                                      builder: (ctx) => AlertDialog(
+                                                        title: const Text(
+                                                            "Enter current mileage to cover up for hardware inaccuracies"),
+                                                        content: TextField(
+                                                          controller:
+                                                          mileageController,
+                                                          keyboardType:
+                                                          TextInputType.number,
+                                                          decoration:
+                                                          const InputDecoration(
+                                                            hintText: "Enter mileage",
+                                                          ),
+                                                        ),
+                                                        actions: [
+                                                          ElevatedButton(
+                                                            onPressed: () {
+                                                              VehicleMonitorService()
+                                                                  .stopMonitoring(
+                                                                  ref,
+                                                                  double.parse(
+                                                                      mileageController
+                                                                          .text
+                                                                          .trim()));
+                                                              monitoringVehicleId =
+                                                              null;
+                                                              setState(() {});
+                                                              Navigator.of(ctx)
+                                                                  .pop(true);
+                                                            },
+                                                            child: const Text("Okay"),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                  }
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                                child: const Text(
+                                                  'Delete',
+                                                  style:
+                                                  TextStyle(color: Colors.white),
+                                                ),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () async {
+                                                  if (isMonitoring) {
+                                                    showDialog(
+                                                      context: context,
+                                                      builder: (ctx) => AlertDialog(
+                                                        title: const Text(
+                                                            "Enter current mileage to cover up for hardware inaccuracies"),
+                                                        content: TextField(
+                                                          controller:
+                                                          mileageController,
+                                                          keyboardType:
+                                                          TextInputType.number,
+                                                          decoration:
+                                                          const InputDecoration(
+                                                            hintText: "Enter mileage",
+                                                          ),
+                                                        ),
+                                                        actions: [
+                                                          ElevatedButton(
+                                                            onPressed: () {
+                                                              VehicleMonitorService()
+                                                                  .stopMonitoring(
+                                                                  ref,
+                                                                  double.parse(
+                                                                      mileageController
+                                                                          .text
+                                                                          .trim()));
+                                                              monitoringVehicleId =
+                                                              null;
+                                                              setState(() {});
+                                                              Navigator.of(ctx)
+                                                                  .pop(true);
+                                                            },
+                                                            child: const Text("Okay"),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                  } else {
+                                                    showDialog(
+                                                      context: context,
+                                                      builder: (ctx) => AlertDialog(
+                                                        title: const Text(
+                                                            "Starting to drive?"),
+                                                        content: const Text(
+                                                            "Make sure to set your device on the dashboard of your car or on a phone stand of your Bike for better accuracy, Otherwise you might experience crappy monitoring..."),
+                                                        actions: [
+                                                          ElevatedButton(
+                                                            onPressed: () =>
+                                                                Navigator.of(ctx)
+                                                                    .pop(true),
+                                                            child:
+                                                            const Text("Okay"),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                    await VehicleMonitorService()
+                                                        .startMonitoring(
+                                                      userId:
+                                                      auth.currentUser!.uid,
+                                                      vehicleId: vehicle.id,
+                                                      make: vehicle['make'],
+                                                      model: vehicle['model'],
+                                                      ref: ref,
+                                                    );
+                                                    monitoringVehicleId = vehicle.id;
+                                                  }
+                                                  setState(() {});
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: isMonitoring
+                                                      ? Colors.orange
+                                                      : Colors.green,
+                                                ),
+                                                child: Text(
+                                                  isMonitoring ? 'Stop' : 'Start',
+                                                  style: const TextStyle(
+                                                      color: Colors.white),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                        : const SizedBox.shrink(),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       );
                     },
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(child: Text('Error: $e')),
                   );
                 },
               ),
