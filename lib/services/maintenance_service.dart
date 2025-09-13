@@ -18,11 +18,14 @@ class MaintenanceService {
     final remaining = nextDue - vehicle["mileage"];
 
     if(remaining<100){
+      double dis=nextDue-remaining;
       reminders.add({
+        "vehicleId" : vehicle.id,
         "name": "${vehicle['make']} ${vehicle['model']}",
         "title": "Oil Change",
         "dueAt": nextDue,
         "remaining": remaining,
+        "distance" : dis
       });
     }
 
@@ -31,10 +34,10 @@ class MaintenanceService {
     return reminders;
   }
 
-  Future<void> updateOilChange(QueryDocumentSnapshot<Map<String, dynamic>> vehicle, WidgetRef ref, double distance) async {
+  Future<void> updateOilChange(String id, WidgetRef ref, double distance) async {
     final auth = ref.read(firebaseAuthProvider);
     final firestore = FirebaseFirestore.instance;
-    final docRef = firestore.collection('users').doc(auth.currentUser!.uid).collection('vehicles').doc(vehicle.id);
+    final docRef = firestore.collection('users').doc(auth.currentUser!.uid).collection('vehicles').doc(id);
     await docRef.update({'engineOil': distance});
   }
 }

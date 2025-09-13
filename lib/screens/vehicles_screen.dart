@@ -7,17 +7,17 @@ import 'package:raxxy/widgets/reusable_widgets.dart';
 import '../providers/provider.dart';
 import '../providers/vehicle_provider.dart';
 import '../services/vehicle_monitor_service.dart';
-import 'add_vehicle.dart';
+import 'vehicle_subscreens/add_vehicle.dart';
 
-class HomePage extends ConsumerStatefulWidget {
+class VehiclesScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
-  const HomePage({super.key, required this.controller});
+  const VehiclesScreen({super.key, required this.controller});
 
   @override
-  ConsumerState<HomePage> createState() => _HomePageState();
+  ConsumerState<VehiclesScreen> createState() => _VehiclesScreenState();
 }
 
-class _HomePageState extends ConsumerState<HomePage> {
+class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
   int? expandedIndex;
   String? monitoringVehicleId; // Track which vehicle is being monitored
 

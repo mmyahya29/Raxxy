@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import 'package:raxxy/screens/dashboard_screen.dart';
-import 'package:raxxy/screens/home.dart';
+import 'package:raxxy/screens/vehicles_screen.dart';
 import 'package:raxxy/screens/settings_screen.dart';
 
 class PersistentNavWrapper extends StatefulWidget {
@@ -23,7 +23,7 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
   List<Widget> _buildScreens() {
     return [
       DashboardScreen(controller: _controller),
-      HomePage(controller: _controller,),
+      VehiclesScreen(controller: _controller,),
       SettingsScreen(controller: _controller,),
     ];
   }
