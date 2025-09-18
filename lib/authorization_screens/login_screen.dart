@@ -20,6 +20,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
+  bool pashid=true;
+
   final auth = FirebaseAuth.instance;
   final firestore = FirebaseFirestore.instance;
 
@@ -51,6 +53,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget buildAuth() {
+
     return SingleChildScrollView(
       child: Padding(
         padding:  EdgeInsets.all(20.0),
@@ -63,9 +66,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 26.sp),
             ),
             SizedBox(height: 40.h),
-            buildTextField(context, emailController, 'Email'),
-            SizedBox(height: 10.h),
-            buildTextField(context, passwordController, 'Password', obscure: true),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6.0, 0.0, 2.0, 8.0).r,
+                child: Text(
+                  'Email',
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            buildTextField(context, emailController, 'someone@example.com', () => setState(() {})),
+            SizedBox(height: 20.h),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6.0, 0.0, 2.0, 8.0).r,
+                child: Text(
+                  'Password',
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            buildTextField(context, passwordController, 'Password', () => setState(() {pashid=!pashid; print(pashid);}), obscure: pashid, pass: true),
             SizedBox(height: 20.h),
             buildButton('Login', authenticate, null),
             SizedBox(height: 10.h),

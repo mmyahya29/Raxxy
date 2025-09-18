@@ -67,7 +67,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 26.sp),
             ),
             SizedBox(height: 40.h),
-            buildTextField(context, emailController, 'Email'),
+            buildTextField(context, emailController, 'Email',() => setState(() {})),
             SizedBox(height: 20.h),
             buildButton('Reset', resetPassword, null),
             SizedBox(height: 10.h),

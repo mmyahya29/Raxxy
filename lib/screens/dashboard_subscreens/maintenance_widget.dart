@@ -92,7 +92,7 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
                                       actions: [
                                         ElevatedButton(
                                           onPressed: () {
-                                            MaintenanceService().updateOilChange(s["vehicleId"], ref, double.parse(mileageController.text.trim()));
+                                            MaintenanceService().updateMaintenaceState(s["vehicleId"], ref, double.parse(mileageController.text.trim()), s["title"]);
                                             rebuild();
                                             Navigator.of(ctx)
                                                 .pop(true);
@@ -102,7 +102,7 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
                                       ],
                                     ),
                                   );
-                                  MaintenanceService().updateOilChange(s["vehicleId"], ref, double.parse(mileageController.text.trim()));
+                                  MaintenanceService().updateMaintenaceState(s["vehicleId"], ref, double.parse(mileageController.text.trim()), s["title"]);
                                   rebuild();
                                   Navigator.of(ctx)
                                       .pop(true);
@@ -111,7 +111,7 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
                               ),
                               ElevatedButton(
                                 onPressed: () {
-                                  MaintenanceService().updateOilChange(s['vehicleId'], ref, s["distance"]);
+                                  MaintenanceService().updateMaintenaceState(s['vehicleId'], ref, s["distance"], s["title"]);
                                   rebuild();
                                   Navigator.of(ctx)
                                       .pop(true);

@@ -19,6 +19,8 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
   final yearController = TextEditingController();
   final mileageController = TextEditingController();
   final lastOilController = TextEditingController();
+  final tyresAgeController = TextEditingController();
+  final brakesAgeController = TextEditingController();
 
   Future<void> addVehicleForUser({
     required WidgetRef ref,
@@ -28,6 +30,8 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
     required int year,
     required int mileage,
     required int engineOil,
+    required int tyresAge,
+    required int brakesAge,
   }) async {
     final auth = ref.read(firebaseAuthProvider);
     final firestore = ref.read(firestoreProvider);
@@ -46,6 +50,8 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
       'year': year,
       'mileage': mileage,
       'engineOil': engineOil,
+      'tyresAge': tyresAge,
+      'brakesAge': brakesAge,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
@@ -67,6 +73,8 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
         year: int.parse(yearController.text.trim()),
         mileage: int.parse(mileageController.text.trim()),
         engineOil: int.parse(lastOilController.text.trim()),
+        tyresAge: int.parse(tyresAgeController.text.trim()),
+        brakesAge: int.parse(brakesAgeController.text.trim()),
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -92,15 +100,19 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
             children: [
               buildDropdown('Type', ['Car', 'Bike'], selectedType),
               SizedBox(height: 10.h),
-              buildTextField(context, makeController, 'Make'),
+              buildTextField(context, makeController, 'Make', () => setState(() {})),
               SizedBox(height: 10.h),
-              buildTextField(context, modelController, 'Model'),
+              buildTextField(context, modelController, 'Model', () => setState(() {})),
               SizedBox(height: 10.h),
-              buildTextField(context, yearController, 'Year', inputType: TextInputType.number),
+              buildTextField(context, yearController, 'Year', () => setState(() {}), inputType: TextInputType.number),
               SizedBox(height: 10.h),
-              buildTextField(context, mileageController, 'Current Mileage', inputType: TextInputType.number),
+              buildTextField(context, mileageController, 'Current Mileage', () => setState(() {}), inputType: TextInputType.number),
               SizedBox(height: 10.h),
-              buildTextField(context, lastOilController, 'Last Engine Oil Change at...', inputType: TextInputType.number),
+              buildTextField(context, lastOilController, 'Last Engine Oil Change at...', () => setState(() {}), inputType: TextInputType.number),
+              SizedBox(height: 10.h),
+              buildTextField(context, tyresAgeController, 'Tyres age from (mileage)...', () => setState(() {}), inputType: TextInputType.number),
+              SizedBox(height: 10.h),
+              buildTextField(context, brakesAgeController, 'Brakes age from (mileage)...', () => setState(() {}), inputType: TextInputType.number),
               SizedBox(height: 20.h),
               buildSaveButton(),
             ],

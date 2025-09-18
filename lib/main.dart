@@ -7,7 +7,6 @@ import 'package:raxxy/authorization_screens/login_screen.dart';
 import 'package:raxxy/firebase_options.dart';
 import 'package:raxxy/providers/theme_provider.dart';
 import 'package:raxxy/services/notifications_services.dart';
-import 'package:raxxy/services/vehicle_monitor_service.dart';
 
 import 'bottom_nav_bar.dart';
 

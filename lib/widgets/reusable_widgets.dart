@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-Widget buildTextField(BuildContext context, TextEditingController controller, String hint, {bool obscure = false, TextInputType inputType = TextInputType.text}) {
+Widget buildTextField(BuildContext context, TextEditingController controller, String hint, VoidCallback rebuild, {bool pass=false, bool obscure = false, TextInputType inputType = TextInputType.text}) {
+
   return Container(
     height: 50.h,
     width: 320.w,
@@ -27,6 +28,13 @@ Widget buildTextField(BuildContext context, TextEditingController controller, St
           borderRadius: BorderRadius.circular(20.r),
           borderSide: BorderSide.none,
         ),
+          suffixIcon: (pass==true)?IconButton(
+          onPressed: () {
+            rebuild();
+          },
+          icon: Icon(Icons.remove_red_eye_outlined),
+          color: obscure?Colors.blueGrey:Color(0xff664bff),
+        ):null,
       ),
     ),
   );
