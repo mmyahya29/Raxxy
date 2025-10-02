@@ -9,6 +9,7 @@ import '../providers/provider.dart';
 import '../services/maintenance_service.dart';
 import 'dashboard_subscreens/maintenance_widget.dart';
 import 'dashboard_subscreens/monitor_widget.dart';
+import 'dashboard_subscreens/summary_widget.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
@@ -45,7 +46,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               SizedBox(height: 5.h,),
               maintenanceLogWidget(context, () => setState(() {})),
-
+              SizedBox(height: 10.h,),
+              Text(
+                'Maintenance Logs',
+                style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w800),
+              ),
+              SizedBox(height: 5.h,),
+              summaryWidget(context, () => setState(() {})),
             ],
           ),
         ),
