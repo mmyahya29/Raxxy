@@ -39,6 +39,18 @@ class VehicleMonitorService {
   String? _userId;
   String? _vehicleId;
 
+  //Variables for session summary
+  DateTime? _sessionStart;
+  DateTime? _sessionEnd;
+
+  double _maxSpeed = 0.0;
+  double _speedSum = 0.0;
+  int _speedCount = 0;
+
+  int _harshAccelEvents = 0;
+  int _harshBrakeEvents = 0;
+
+
   Future<void> startMonitoring({
     required String userId,
     required String vehicleId,
@@ -50,6 +62,16 @@ class VehicleMonitorService {
     _isMonitoring = true;
     _userId = userId;
     _vehicleId = vehicleId;
+
+    //session summary values reset
+    _sessionStart = DateTime.now();
+    _sessionEnd = null;
+    _maxSpeed = 0.0;
+    _speedSum = 0.0;
+    _speedCount = 0;
+    _harshAccelEvents = 0;
+    _harshBrakeEvents = 0;
+
 
     ref.read(vehicleMonitorProvider.notifier).setVehicle(vehicleId);
     ref.read(vehicleMonitorProvider.notifier).setMake(make);
@@ -73,8 +95,10 @@ class VehicleMonitorService {
       ref.read(vehicleMonitorProvider.notifier).updateAcceleration(avgAccel);
 
       if (avgAccel > accelerationThreshold) {
+        _harshAccelEvents++;
         sendNotification("Woah Buddy! Easy on the Gas", "Acceleration: ${avgAccel.toStringAsFixed(2)} m/s²");
       } else if (avgAccel < decelerationThreshold) {
+        _harshBrakeEvents++;
         sendNotification("Woah Buddy! Easy on the Brakes", "Deceleration: ${avgAccel.toStringAsFixed(2)} m/s²");
       }
 
@@ -98,6 +122,7 @@ class VehicleMonitorService {
       ),
     ).listen((position) async {
       currentSpeedKmh = position.speed * 3.6;
+      _maxSpeed = max(_maxSpeed, currentSpeedKmh);
       ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
       print('Speed: ${currentSpeedKmh.toStringAsFixed(2)} km/h');
 
@@ -145,7 +170,13 @@ class VehicleMonitorService {
     totalDistanceMeters = 0.0;
     _isMonitoring = false;
 
+    final summary = generateSessionSummary();
+
+    // Optional: Save summary to Firestore
     final firestore = FirebaseFirestore.instance;
+    await firestore.collection('users').doc(_userId)
+        .collection('sessions').add(summary);
+
     final docRef = firestore.collection('users').doc(_userId).collection('vehicles').doc(_vehicleId);
     await docRef.update({'mileage': distance});
 
@@ -154,6 +185,27 @@ class VehicleMonitorService {
     print('Monitoring stopped');
     sendNotification("RAXXY", "Monitoring service stopped");
   }
+
+  Map<String, dynamic> generateSessionSummary() {
+    _sessionEnd = DateTime.now();
+
+    double avgSpeed = _speedCount > 0 ? _speedSum / _speedCount : 0.0;
+    double distanceKm = totalDistanceMeters / 1000.0;
+    Duration duration = _sessionEnd!.difference(_sessionStart!);
+
+    return {
+      "vehicleId": _vehicleId,
+      "startTime": _sessionStart.toString(),
+      "endTime": _sessionEnd.toString(),
+      "duration": duration.inMinutes.toString() + " mins",
+      "distanceKm": distanceKm.toStringAsFixed(2),
+      "maxSpeed": _maxSpeed.toStringAsFixed(2),
+      "avgSpeed": avgSpeed.toStringAsFixed(2),
+      "harshAccelerations": _harshAccelEvents,
+      "harshBrakes": _harshBrakeEvents,
+    };
+  }
+
 
   bool get isMonitoring => _isMonitoring;
 }
