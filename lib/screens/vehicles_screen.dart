@@ -8,6 +8,9 @@ import '../providers/provider.dart';
 import '../providers/vehicle_provider.dart';
 import '../services/vehicle_monitor_service.dart';
 import 'vehicle_subscreens/add_vehicle.dart';
+import 'package:geolocator/geolocator.dart';
+import '../services/crash_detector.dart';
+import 'sos_screen.dart';
 
 class VehiclesScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
@@ -18,8 +21,56 @@ class VehiclesScreen extends ConsumerStatefulWidget {
 }
 
 class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
+  CrashDetector? detector;
   int? expandedIndex;
   String? monitoringVehicleId; // Track which vehicle is being monitored
+
+  @override
+  void initState(){
+    super.initState();
+    _initPermissionsAndStart();
+
+  }
+
+  Future<void> _initPermissionsAndStart() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // prompt user to enable GPS
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // cannot proceed
+        return;
+      }
+    }
+
+    detector = CrashDetector(
+      onCrashDetected: (Position pos, double last, double current) {
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SOSScreen(
+              position: pos,
+              lastSpeed: last,
+            ),
+          ),
+        );
+      },
+    );
+
+    await detector?.start();
+  }
+
+
+  @override
+  void dispose() {
+    detector?.stop();   // sensors closing
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

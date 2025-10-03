@@ -32,6 +32,12 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^3.0.0-dev.16
   sensors_plus: ^6.1.1
+  geolocator: ^11.0.0
+  telephony: ^0.2.0
+  vibration : ^1.8.4
+  flutter_local_notifications: ^12.0.3
+  url_launcher: ^6.1.10
+
   google_maps_flutter: ^2.5.0
   google_sign_in: ^6.2.0
 #  fl_chart: ^0.55.0
@@ -45,8 +51,6 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  geolocator: ^12.0.0
-  flutter_local_notifications: ^18.0.1
   permission_handler: ^12.0.1
   persistent_bottom_nav_bar: ^6.2.1
   fl_chart: ^1.0.0
