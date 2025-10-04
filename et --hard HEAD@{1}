@@ -1,0 +1,24 @@
+[33m6a3a4ec[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m HEAD@{0}: reset: moving to HEAD~1
+[33m7146373[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{1}: pull: Fast-forward
+[33m6a3a4ec[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m HEAD@{2}: commit: summary widget
+[33m96b9f5f[m HEAD@{3}: commit: gradle fixes
+[33m24ba426[m HEAD@{4}: commit: bleh
+[33mf1d6c9b[m HEAD@{5}: commit: maintenance...
+[33m01d8f8e[m HEAD@{6}: commit: bleh
+[33mc9ff54e[m HEAD@{7}: commit: Maintenance..
+[33md099797[m HEAD@{8}: commit: bleh
+[33m4d24364[m HEAD@{9}: commit: bleh
+[33md772ec2[m HEAD@{10}: commit: bleh
+[33m56368ae[m HEAD@{11}: commit: theme adjustments
+[33mce9bb7c[m HEAD@{12}: commit: monitoring service updated
+[33m645dda7[m HEAD@{13}: commit: bleh
+[33mbb3ffac[m HEAD@{14}: commit: bleh
+[33me401a20[m HEAD@{15}: commit: bleh
+[33m0d2c2a5[m HEAD@{16}: commit: bleh
+[33m1c431af[m HEAD@{17}: commit: reset password option added
+[33m3cfcc8f[m HEAD@{18}: commit: Graph
+[33m86e6611[m HEAD@{19}: commit: speed acceleration graph
+[33m2a2c3d9[m HEAD@{20}: commit: bleh
+[33m05f3459[m HEAD@{21}: commit: Login and SignUp funtionality Improved
+[33mf6de499[m HEAD@{22}: Branch: renamed refs/heads/master to refs/heads/main
+[33mf6de499[m HEAD@{24}: commit (initial): initial commit
