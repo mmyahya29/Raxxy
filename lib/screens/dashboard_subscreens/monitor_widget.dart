@@ -29,7 +29,7 @@ Widget monitorWidget(BuildContext context, DashboardScreen widget){
         SizedBox(height: 10.h),
         InkWell(
           onTap: (){
-            widget.controller.jumpToTab(1);
+            widget.controller.jumpToTab(2);
           },
           child: Container(
             height: 120.h,

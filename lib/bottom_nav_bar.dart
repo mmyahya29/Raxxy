@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import 'package:raxxy/screens/dashboard_screen.dart';
+import 'package:raxxy/screens/maintenance_screen.dart';
 import 'package:raxxy/screens/vehicles_screen.dart';
 import 'package:raxxy/screens/settings_screen.dart';
 
@@ -23,6 +24,7 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
   List<Widget> _buildScreens() {
     return [
       DashboardScreen(controller: _controller),
+      MaintenanceScreen(controller: _controller),
       VehiclesScreen(controller: _controller,),
       SettingsScreen(controller: _controller,),
     ];
@@ -33,6 +35,12 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
       PersistentBottomNavBarItem(
         icon: const Icon(Icons.dashboard),
         title: ("Dashboard"),
+        activeColorPrimary: Color(0xff8f89ff),
+        inactiveColorPrimary: Colors.grey,
+      ),
+      PersistentBottomNavBarItem(
+        icon: const Icon(Icons.build),
+        title: ("Maintenance"),
         activeColorPrimary: Color(0xff8f89ff),
         inactiveColorPrimary: Colors.grey,
       ),

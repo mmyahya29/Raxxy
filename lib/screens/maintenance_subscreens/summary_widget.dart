@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -6,8 +7,6 @@ import '../../providers/summary_provider.dart';
 import '../../services/maintenance_service.dart';
 
 Widget summaryWidget(BuildContext context, VoidCallback rebuild){
-
-  final mileageController = TextEditingController();
 
   return Container(
     height: 300.h,
@@ -41,24 +40,29 @@ Widget summaryWidget(BuildContext context, VoidCallback rebuild){
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(0,0,0,10).r,
                     child: Container(
-                      height: 140.h,
+                      height: 150.h,
                       width: MediaQuery
                           .of(context)
                           .size
                           .width - 60,
                       decoration: BoxDecoration(
-                        color: Colors.black12,
+                        color: Color(0xff001f68),
                         borderRadius: BorderRadius.circular(30.r),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text("Session: ${sum["endTime"]}", style: TextStyle(
-                              fontSize: 22.sp,
+                          Text("Session:", style: TextStyle(
+                              fontSize: 20.sp,
                               fontWeight: FontWeight.w900),),
+                          Text("${(sum["endTime"] as Timestamp).toDate()}", style: TextStyle(
+                              fontSize: 18.sp,
+                              fontWeight: FontWeight.w700),),
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text("Duration:", style: TextStyle(
                                       fontSize: 18.sp,
@@ -75,6 +79,7 @@ Widget summaryWidget(BuildContext context, VoidCallback rebuild){
                                 ],
                               ),
                               Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text("${sum["duration"]}", style: TextStyle(
                                       fontSize: 18.sp,

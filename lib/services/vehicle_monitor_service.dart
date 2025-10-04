@@ -194,8 +194,8 @@ class VehicleMonitorService {
     Duration duration = _sessionEnd!.difference(_sessionStart!);
 
     return {
-      "startTime": _sessionStart.toString(),
-      "endTime": _sessionEnd.toString(),
+      "startTime": _sessionStart,
+      "endTime": _sessionEnd,
       "duration": duration.inMinutes.toString() + " mins",
       "distanceKm": distanceKm.toStringAsFixed(2),
       "maxSpeed": _maxSpeed.toStringAsFixed(2),
