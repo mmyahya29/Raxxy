@@ -6,6 +6,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+
 android {
     namespace = "com.example.raxxy"
     compileSdk = flutter.compileSdkVersion
@@ -24,7 +25,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.raxxy"
-        minSdk = 23
+        minSdk = 24
 //        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

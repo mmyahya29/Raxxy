@@ -33,9 +33,10 @@ dependencies:
   flutter_riverpod: ^3.0.0-dev.16
   sensors_plus: ^6.1.1
   geolocator: ^12.0.0
-  telephony:  ^0.2.0
 
-  workmanager: ^0.5.2
+  telephony:
+    path: packages/telephony-0.2.0
+  workmanager: ^0.5.1
 
   #  vibration : ^1.8.4
   flutter_local_notifications: ^18.0.1
