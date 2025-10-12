@@ -84,7 +84,7 @@ Widget summaryWidget(BuildContext context, VoidCallback rebuild){
                                   Text("${sum["duration"]}", style: TextStyle(
                                       fontSize: 18.sp,
                                       fontWeight: FontWeight.w500),),
-                                  Text("${sum["distanceKm"]}", style: TextStyle(
+                                  Text("${(sum["distanceKm"]as num).toStringAsFixed(2)}", style: TextStyle(
                                       fontSize: 18.sp,
                                       fontWeight: FontWeight.w500),),
                                   Text("${sum["harshAccelerations"]}", style: TextStyle(

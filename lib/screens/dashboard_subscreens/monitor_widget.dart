@@ -10,32 +10,20 @@ import 'package:raxxy/screens/dashboard_screen.dart';
 import '../../providers/provider.dart';
 
 Widget monitorWidget(BuildContext context, DashboardScreen widget){
-  return Container(
-    height: 390.h,
-    width: MediaQuery.of(context).size.width - 40,
-    decoration: BoxDecoration(
-      color: Theme.of(context).cardColor,
-      borderRadius: BorderRadius.circular(30.r),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.3),
-          blurRadius: 4,
-          spreadRadius: 3,
-        ),
-      ],
-    ),
-    child: Column(
-      children: [
-        SizedBox(height: 10.h),
-        InkWell(
-          onTap: (){
-            widget.controller.jumpToTab(2);
-          },
-          child: Container(
-            height: 120.h,
-            width: MediaQuery.of(context).size.width - 60,
+  return InkWell(
+      onTap: (){
+        widget.controller.jumpToTab(2);
+      },
+    child: Consumer(
+      builder: (context, ref, _) {
+        final monitor = ref.watch(vehicleMonitorProvider);
+
+        if (monitor.vehicleId == null) {
+          return Container(
+            height: 50.h,
+            width: MediaQuery.of(context).size.width - 40,
             decoration: BoxDecoration(
-              color: const Color(0xff007e0f),
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(30.r),
               boxShadow: [
                 BoxShadow(
@@ -45,34 +33,81 @@ Widget monitorWidget(BuildContext context, DashboardScreen widget){
                 ),
               ],
             ),
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-            child: CurrentMonitor(),
-          ),
-        ),
-        SizedBox(height: 10.h),
-        Text(
-          'Performance Metrics',
-          style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
-        ),
-        SizedBox(height: 10.h),
-        Container(
-          height: 200.h,
-          width: MediaQuery.of(context).size.width - 60,
-          decoration: BoxDecoration(
-            color: const Color(0xff332d85),
-            borderRadius: BorderRadius.circular(30.r),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 4,
-                spreadRadius: 3,
+            child: Center(
+              child: Text(
+                'Tap Here to start a Driving Session!',
+                style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w300),
               ),
-            ],
-          ),
-          padding: EdgeInsets.all(16.r),
-          child: MetricsGraph(),
+            ),
+          );
+        }
+
+      return Container(
+        height: 390.h,
+        width: MediaQuery.of(context).size.width - 40,
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(30.r),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 4,
+              spreadRadius: 3,
+            ),
+          ],
         ),
-      ],
+        child: Column(
+          children: [
+            SizedBox(height: 10.h),
+            InkWell(
+              onTap: (){
+                widget.controller.jumpToTab(2);
+              },
+              child: Container(
+                height: 120.h,
+                width: MediaQuery.of(context).size.width - 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xff007e0f),
+                  borderRadius: BorderRadius.circular(30.r),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                child: CurrentMonitor(),
+              ),
+            ),
+            SizedBox(height: 10.h),
+            Text(
+              'Performance Metrics',
+              style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: 10.h),
+            Container(
+              height: 200.h,
+              width: MediaQuery.of(context).size.width - 60,
+              decoration: BoxDecoration(
+                color: const Color(0xff332d85),
+                borderRadius: BorderRadius.circular(30.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
+              padding: EdgeInsets.all(16.r),
+              child: MetricsGraph(),
+            ),
+          ],
+        ),
+      );
+      }
     ),
   );
 }
@@ -81,15 +116,6 @@ Widget CurrentMonitor(){
   return Consumer(
     builder: (context, ref, _) {
       final monitor = ref.watch(vehicleMonitorProvider);
-
-      if (monitor.vehicleId == null) {
-        return Center(
-          child: Text(
-            'No currently active Vehicle',
-            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w300),
-          ),
-        );
-      }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -123,10 +149,6 @@ Widget MetricsGraph(){
       final monitor = ref.watch(vehicleMonitorProvider);
       final speedData = monitor.speedHistory;
       final accData = monitor.accelerationHistory;
-
-      if (speedData.isEmpty && accData.isEmpty) {
-        return const Center(child: Text("No speed or acceleration data yet", style: TextStyle(color: Colors.white)));
-      }
 
       final maxY = [
         ...speedData,

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
-import 'dashboard_subscreens/maintenance_widget.dart';
+import 'maintenance_subscreens/maintenance_widget.dart';
 import 'dashboard_subscreens/monitor_widget.dart';
-import 'maintenance_subscreens/summary_widget.dart';
+import 'dashboard_subscreens/summary_widget.dart';
 
 class MaintenanceScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
