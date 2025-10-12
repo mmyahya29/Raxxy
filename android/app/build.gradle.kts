@@ -6,6 +6,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+
 android {
     namespace = "com.example.raxxy"
     compileSdk = flutter.compileSdkVersion
