@@ -87,12 +87,25 @@ class VehicleMonitorService {
       currentAcceleration = event;
 
       // Only horizontal movement (X and Y)
-      double horizontalAccel = event.x + event.y;
+      double horizontalAccel = sqrt(event.x *event.x + event.y * event.y);
+      if((event.x+event.y)<0){
+        horizontalAccel*=-1;
+      }
       // double horizontalDecel = event.y;
 
       _accelBuffer.add(horizontalAccel);
       if (_accelBuffer.length > _acBufferSize) {
         _accelBuffer.removeAt(0); // keep buffer size fixed
+      }
+
+      int negcount=0;
+      int poscount=0;
+      for(int i=0; i<_accelBuffer.length-1; i++){
+        if((_accelBuffer[i]<0)&&(_accelBuffer[i+1]>0)){
+          negcount++;
+        }else{
+          poscount++;
+        }
       }
 
       // _decelBuffer.add(horizontalDecel);
@@ -101,6 +114,9 @@ class VehicleMonitorService {
       // }
 
       double avgAccel = _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
+      if(negcount>poscount)
+        avgAccel*=-1;
+
 
       // double avgDecel = _decelBuffer.reduce((a, b) => a + b) / _decelBuffer.length;
 
