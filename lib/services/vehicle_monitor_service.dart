@@ -25,6 +25,7 @@ class VehicleMonitorService {
 
   UserAccelerometerEvent? currentAcceleration;
   double currentSpeedKmh = 0.0;
+
   double totalDistanceMeters = 0.0;
   Position? _lastPosition;
 
@@ -35,9 +36,6 @@ class VehicleMonitorService {
 
   final List<double> _accelBuffer = [];
   final int _acBufferSize = 20;
-
-  final List<double> _decelBuffer = [];
-  final int _dcBufferSize = 20;
 
   String? _userId;
   String? _vehicleId;
@@ -108,17 +106,9 @@ class VehicleMonitorService {
         }
       }
 
-      // _decelBuffer.add(horizontalDecel);
-      // if (_decelBuffer.length > _dcBufferSize) {
-      //   _decelBuffer.removeAt(0); // keep buffer size fixed
-      // }
-
       double avgAccel = _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
       if(negcount>poscount)
         avgAccel*=-1;
-
-
-      // double avgDecel = _decelBuffer.reduce((a, b) => a + b) / _decelBuffer.length;
 
       ref.read(vehicleMonitorProvider.notifier).updateAcceleration(avgAccel);
 
@@ -129,8 +119,6 @@ class VehicleMonitorService {
         _harshBrakeEvents++;
         sendNotification("Woah Buddy! Easy on the Brakes", "Deceleration: ${avgAccel.toStringAsFixed(2)} m/s²");
       }
-
-      // print('Smoothed Horizontal Acceleration (moving avg): ${avgAccel.toStringAsFixed(2)} m/s²');
     });
 
     // Check location permission
@@ -143,16 +131,46 @@ class VehicleMonitorService {
       }
     }
 
+    final List<Map<String, dynamic>> _speedHistory = [];
+
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.best,
         distanceFilter: 1,
       ),
     ).listen((position) async {
+      final now =DateTime.now();
       currentSpeedKmh = position.speed * 3.6;
       _maxSpeed = max(_maxSpeed, currentSpeedKmh);
       ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
       print('Speed: ${currentSpeedKmh.toStringAsFixed(2)} km/h');
+
+      // Store speed with time for checking duration of speed drop // like 1 second mein more than 15 ka drop
+      _speedHistory.add({
+        'time': now,
+        'speed': currentSpeedKmh,
+      });
+      if (_speedHistory.length > 10) _speedHistory.removeAt(0);
+
+      // Check for sudden // woi jo 2 length rkhi thi speed buffer ki
+      if (_speedHistory.length >= 2) {
+        // getting last two readings and unka time
+        final recent = _speedHistory[_speedHistory.length - 1];
+        final previous = _speedHistory[_speedHistory.length - 2];
+
+        final delTime = recent['time'].difference(previous['time']).inMilliseconds / 1000.0;
+        final delSpeed = recent['speed'] - previous['speed'];
+
+        // woi acceleration buffer but istead saari k oper iterate kren we'll only check the last two, these will always be the most recent ones
+        double accelFluctuation = _accelBuffer.last - _accelBuffer[_accelBuffer.length - 2];
+
+        if ((delSpeed < -15 && delTime < 1.5)||(accelFluctuation.abs()>3)) {
+          sendNotification("Crash Detected", "Possible impact detected");
+          // Idr ap crash detect hony k baad jo krna hai wo kr skty ho
+        }
+      }
+
+
 
       if (_lastPosition != null) {
         double distance = Geolocator.distanceBetween(
