@@ -93,6 +93,7 @@ flutter:
   assets:
     - assets/images/Google_icon.png
     - assets/images/raxxy_icon_main.png
+    - assets/images/raxxy_icon1.png
   #   - assets/tflite_model.tflite
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
