@@ -26,6 +26,8 @@ class VehicleMonitorService {
   UserAccelerometerEvent? currentAcceleration;
   double currentSpeedKmh = 0.0;
 
+  final List<Map<String, dynamic>> _speedHistory = [];
+
   double totalDistanceMeters = 0.0;
   Position? _lastPosition;
 
@@ -131,7 +133,7 @@ class VehicleMonitorService {
       }
     }
 
-    final List<Map<String, dynamic>> _speedHistory = [];
+
 
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
