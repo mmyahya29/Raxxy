@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:raxxy/services/crash_detector.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -55,6 +56,7 @@ class VehicleMonitorService {
 
 
   Future<void> startMonitoring({
+    required BuildContext context,
     required String userId,
     required String vehicleId,
     required String make,
@@ -163,12 +165,13 @@ class VehicleMonitorService {
         final delTime = recent['time'].difference(previous['time']).inMilliseconds / 1000.0;
         final delSpeed = recent['speed'] - previous['speed'];
 
-        // woi acceleration buffer but istead saari k oper iterate kren we'll only check the last two, these will always be the most recent ones
+        // woi acceleration buffer but instead saari k oper iterate kren we'll only check the last two, these will always be the most recent ones
         double accelFluctuation = _accelBuffer.last - _accelBuffer[_accelBuffer.length - 2];
 
         if ((delSpeed < -15 && delTime < 1.5)||(accelFluctuation.abs()>3)) {
           sendNotification("Crash Detected", "Possible impact detected");
           // Idr ap crash detect hony k baad jo krna hai wo kr skty ho
+          CrashDetector.checkForCrash(context);
         }
       }
 
@@ -238,7 +241,7 @@ class VehicleMonitorService {
     sendNotification("RAXXY", "Monitoring service stopped");
   }
 
-  Map<String, dynamic> generateSessionSummary() {
+  Map<String, dynamic> generateSessionSummary()  {
     _sessionEnd = DateTime.now();
 
     double avgSpeed = _speedCount > 0 ? _speedSum / _speedCount : 0.0;
@@ -261,6 +264,25 @@ class VehicleMonitorService {
     final firestore = FirebaseFirestore.instance;
     final userId = _userId;
 
+    List<Map<String, dynamic>> current_goals =[] ;
+
+    try {
+      final querySnapshot = await firestore
+          .collection('users')
+          .doc(userId)
+          .collection('goals')
+          .get();
+
+      current_goals = querySnapshot.docs
+          .map((doc) => {
+        'id': doc.id,
+        ...doc.data(),
+      }).toList();
+
+      print("Fetched ${current_goals.length} goals for user $userId");
+    } catch (e) {
+      print("Error fetching goals: $e");
+    }
 
     final int accHarshEvents = (summary["harshAccelerations"] ?? 0);
     final int brHarshEvents = (summary["harshBrakes"] ?? 0);
@@ -275,6 +297,27 @@ class VehicleMonitorService {
     double brEventsPerMinute = brHarshEvents / durationMinutes;
     print(brEventsPerMinute);
 
+    //Deleting completed goals
+    for (var goal in current_goals) {
+      if ((goal["title"] == "Improve Smooth Throttle" &&
+          goal["target"] ==
+              "Drive with fewer than ${durationMinutes * 0.2} harsh events" &&
+          accEventsPerMinute < 0.2)||(goal["title"] == "Improve Smooth Braking" &&
+          goal["target"] ==
+              "Drive with fewer than ${durationMinutes * 0.2} harsh events" &&
+          brEventsPerMinute < 0.2)) {
+
+        await firestore
+            .collection('users')
+            .doc(userId)
+            .collection('goals')
+            .doc(goal["id"])
+            .delete();
+
+        print("Goal completed and deleted: ${goal['title']}");
+      }
+    }
+
     //If more than 0.2 events per minute, add a goal
     if (accEventsPerMinute > 0.2) {
       final goal = {
@@ -285,8 +328,10 @@ class VehicleMonitorService {
         "target": "Drive with fewer than ${durationMinutes * 0.2} harsh events",
       };
 
-      await firestore.collection("users").doc(userId).collection("goals").add(goal);
-      print("New goal generated: $goal");
+      if(current_goals.isNotEmpty&&(!goalExists(current_goals, goal))){
+        await firestore.collection("users").doc(userId).collection("goals").add(goal);
+        print("New goal generated: $goal");
+      }
     }
 
     if (brEventsPerMinute > 0.2) {
@@ -298,9 +343,17 @@ class VehicleMonitorService {
         "target": "Drive with fewer than ${durationMinutes * 0.2} harsh events",
       };
 
-      await firestore.collection("users").doc(userId).collection("goals").add(goal);
-      print("New goal generated: $goal");
+      if(current_goals.isNotEmpty&&(!goalExists(current_goals, goal))){
+        await firestore.collection("users").doc(userId).collection("goals").add(goal);
+        print("New goal generated: $goal");
+      }
     }
+  }
+
+  bool goalExists(List<Map<String, dynamic>> goals, Map<String, dynamic> newGoal) {
+    return goals.any((g) =>
+    g["title"] == newGoal["title"] &&
+        g["target"] == newGoal["target"]);
   }
 
   Future<void> calculateDrivingScore({
@@ -350,9 +403,6 @@ class VehicleMonitorService {
     print('Session Score: $sessionScore');
     print('Updated Global Driving Score: $newGlobalScore');
   }
-
-
-
 
 
   bool get isMonitoring => _isMonitoring;

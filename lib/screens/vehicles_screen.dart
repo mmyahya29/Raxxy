@@ -277,6 +277,7 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                                                     );
                                                     await VehicleMonitorService()
                                                         .startMonitoring(
+                                                      context: context,
                                                       userId:
                                                       auth.currentUser!.uid,
                                                       vehicleId: vehicle.id,

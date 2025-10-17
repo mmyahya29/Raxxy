@@ -1,0 +1,29 @@
+[
+  {
+    "keywords": ["misfire", "misfiring", "rough idle", "jerking"],
+    "causes": [
+      "Faulty spark plugs or ignition coils",
+      "Dirty fuel injectors",
+      "Clogged air filter"
+    ],
+    "fix": "Start by checking your spark plugs. If they’re dirty, clean or replace them. Then inspect ignition coils and ensure injectors are not blocked."
+  },
+  {
+    "keywords": ["overheat", "overheating", "temperature high"],
+    "causes": [
+      "Low coolant level",
+      "Faulty thermostat",
+      "Broken radiator fan"
+    ],
+    "fix": "Check coolant levels and refill if low. Inspect radiator fan and thermostat for proper function."
+  },
+  {
+    "keywords": ["brake", "stopping", "slow stop", "grinding"],
+    "causes": [
+      "Worn brake pads",
+      "Low brake fluid",
+      "Warped rotors"
+    ],
+    "fix": "Inspect brake pads for wear. Replace if needed. Also check fluid levels and rotor condition."
+  }
+]
