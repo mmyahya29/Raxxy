@@ -163,7 +163,8 @@ class VehicleMonitorService {
         final previous = _speedHistory[_speedHistory.length - 2];
 
         final delTime = recent['time'].difference(previous['time']).inMilliseconds / 1000.0;
-        final delSpeed = recent['speed'] - previous['speed'];
+        final delSpeed = recent[
+        'speed'] - previous['speed'];
 
         // woi acceleration buffer but instead saari k oper iterate kren we'll only check the last two, these will always be the most recent ones
         double accelFluctuation = _accelBuffer.last - _accelBuffer[_accelBuffer.length - 2];

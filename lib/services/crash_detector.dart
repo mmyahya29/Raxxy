@@ -14,6 +14,12 @@ import 'package:vibration/vibration.dart';
 // nichy apny hisaab sy kuch kiya hai....it should not be difficult but I commented about everything
 //feel free to change anything if u think otherwise
 
+
+
+
+final Telephony telephony = Telephony.instance;
+bool smsPermissionGranted = false;
+
 class CrashDetector {
   static Timer? countdownTimer;
   static int remainingSeconds = 15;
@@ -87,12 +93,25 @@ class CrashDetector {
     );
   }
 
-  static void sendHelp(BuildContext context) {
+  static void sendHelp(BuildContext context)async{
     cancelCountdown();
     Navigator.of(context).pop();
     audioPlayer.stop();
+
     // this is the empty function idr baqi kaam krny hen like kya kya bhjna kese kese bhjna...
+
+    if (smsPermissionGranted) {
+      await telephony.sendSms(
+        to: "+923091163059",
+        message: "I need help",
+      );
+      print("Emergency SMS sent");
+    } else {
+      print("SMS Permission not granted");
+    }
+
   }
+
 
   static void startCountdown(BuildContext context) {
     countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {

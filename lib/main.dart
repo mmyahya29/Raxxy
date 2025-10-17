@@ -10,18 +10,26 @@ import 'package:raxxy/services/notifications_services.dart';
 import 'bottom_nav_bar.dart';
 import 'package:workmanager/workmanager.dart';
 import 'services/crash_detector.dart';
+import 'package:telephony/telephony.dart';
+
+final Telephony telephony = Telephony.instance;
+bool smsPermissionGranted = false;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  smsPermissionGranted = await telephony.requestPhoneAndSmsPermissions ?? false;
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await initNotifications();
 
   await Workmanager().initialize(
-    callbackDispatcher,
+
+  callbackDispatcher,
+
     isInDebugMode: true,
   );
 
