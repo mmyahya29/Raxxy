@@ -7,15 +7,11 @@ import 'package:workmanager/workmanager.dart';
 import 'package:telephony/telephony.dart';
 import 'package:vibration/vibration.dart';
 
-
 //If u remember...
 //what I had in mind was k jb crash detect ho tw instantly dialog box show how or ik level of alert ho
 //then 5 sec baad ik or alert, 10 k baad ik or alert, 15 k baad jo b mamlaat in case of emergency krny thy
 // nichy apny hisaab sy kuch kiya hai....it should not be difficult but I commented about everything
 //feel free to change anything if u think otherwise
-
-
-
 
 final Telephony telephony = Telephony.instance;
 bool smsPermissionGranted = false;
@@ -93,25 +89,24 @@ class CrashDetector {
     );
   }
 
-  static void sendHelp(BuildContext context)async{
+  static void sendHelp(BuildContext context) async {
     cancelCountdown();
     Navigator.of(context).pop();
     audioPlayer.stop();
 
     // this is the empty function idr baqi kaam krny hen like kya kya bhjna kese kese bhjna...
 
-    if (smsPermissionGranted) {
-      await telephony.sendSms(
-        to: "+923091163059",
-        message: "I need help",
-      );
-      print("Emergency SMS sent");
-    } else {
-      print("SMS Permission not granted");
+    String emergencyContact = "+923091163059";
+
+    if (emergencyContact != null) {
+      if (smsPermissionGranted) {
+        await telephony.sendSms(to: emergencyContact, message: "I need help");
+        print("Emergency SMS sent");
+      } else {
+        print("SMS Permission not granted");
+      }
     }
-
   }
-
 
   static void startCountdown(BuildContext context) {
     countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -127,6 +122,7 @@ class CrashDetector {
     countdownTimer?.cancel();
   }
 }
+
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     //isko comment kiya hai cuz at the moment Im not sure how this is gonna work

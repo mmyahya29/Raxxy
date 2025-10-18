@@ -7,9 +7,10 @@ import 'package:raxxy/services/crash_detector.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../providers/provider.dart';
 import 'notifications_services.dart';
+
 
 class VehicleMonitorService {
   final ValueNotifier<String?> monitoredVehicleIdNotifier = ValueNotifier(null);
@@ -84,6 +85,13 @@ class VehicleMonitorService {
 
     sendNotification("RAXXY", "Monitoring service started");
 
+    try {
+      await WakelockPlus.enable();
+      print('Wakelock enabled - screen will stay on while monitoring');
+    } catch (e) {
+      print('Failed to enable wakelock: $e');
+    }
+
 
     _accelSub = userAccelerometerEvents.listen((event) {
       currentAcceleration = event;
@@ -157,7 +165,7 @@ class VehicleMonitorService {
       if (_speedHistory.length > 10) _speedHistory.removeAt(0);
 
       // Check for sudden // woi jo 2 length rkhi thi speed buffer ki
-      if (_speedHistory.length >= 2) {
+      if (_speedHistory.length >= 0) {
         // getting last two readings and unka time
         final recent = _speedHistory[_speedHistory.length - 1];
         final previous = _speedHistory[_speedHistory.length - 2];
@@ -168,7 +176,9 @@ class VehicleMonitorService {
 
         // woi acceleration buffer but instead saari k oper iterate kren we'll only check the last two, these will always be the most recent ones
         double accelFluctuation = _accelBuffer.last - _accelBuffer[_accelBuffer.length - 2];
-
+        print(delSpeed);
+        print(delTime);
+        print(accelFluctuation.abs());
         if ((delSpeed < -15 && delTime < 1.5)||(accelFluctuation.abs()>3)) {
           sendNotification("Crash Detected", "Possible impact detected");
           // Idr ap crash detect hony k baad jo krna hai wo kr skty ho
@@ -221,6 +231,13 @@ class VehicleMonitorService {
     _lastPosition = null;
     totalDistanceMeters = 0.0;
     _isMonitoring = false;
+
+    try {
+      await WakelockPlus.disable();
+      print('Wakelock disabled - screen may sleep now');
+    } catch (e) {
+      print('Failed to disable wakelock: $e');
+    }
 
     final summary = generateSessionSummary();
 
