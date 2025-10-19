@@ -13,9 +13,6 @@ import 'package:vibration/vibration.dart';
 // nichy apny hisaab sy kuch kiya hai....it should not be difficult but I commented about everything
 //feel free to change anything if u think otherwise
 
-final Telephony telephony = Telephony.instance;
-bool smsPermissionGranted = false;
-
 class CrashDetector {
   static Timer? countdownTimer;
   static int remainingSeconds = 15;

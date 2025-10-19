@@ -174,11 +174,16 @@ class VehicleMonitorService {
         final delSpeed = recent[
         'speed'] - previous['speed'];
 
-        // woi acceleration buffer but instead saari k oper iterate kren we'll only check the last two, these will always be the most recent ones
-        double accelFluctuation = _accelBuffer.last - _accelBuffer[_accelBuffer.length - 2];
+        // woi acceleration buffer saari k oper iterate kren gy
+        double accelFluctuation = 0;
+
+        for (int i=0;i<_accelBuffer.length-1;i++){
+          accelFluctuation+=_accelBuffer[i]-_accelBuffer[i+1];
+        }
         print(delSpeed);
         print(delTime);
         print(accelFluctuation.abs());
+
         if ((delSpeed < -15 && delTime < 1.5)||(accelFluctuation.abs()>3)) {
           sendNotification("Crash Detected", "Possible impact detected");
           // Idr ap crash detect hony k baad jo krna hai wo kr skty ho
