@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:raxxy/services/crash_detector.dart';
@@ -10,7 +9,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../providers/provider.dart';
 import 'notifications_services.dart';
-
 
 class VehicleMonitorService {
   final ValueNotifier<String?> monitoredVehicleIdNotifier = ValueNotifier(null);
@@ -24,6 +22,7 @@ class VehicleMonitorService {
 
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
   StreamSubscription<Position>? _positionSub;
+  Timer? _uiUpdateTimer;
 
   UserAccelerometerEvent? currentAcceleration;
   double currentSpeedKmh = 0.0;
@@ -39,12 +38,17 @@ class VehicleMonitorService {
   final double decelerationThreshold = -1.5;
 
   final List<double> _accelBuffer = [];
-  final int _acBufferSize = 20;
+  final int _acBufferSize = 10;
 
   String? _userId;
   String? _vehicleId;
 
-  //Variables for session summary
+  // Notification cooldown
+  DateTime? _lastHarshAccelNotification;
+  DateTime? _lastHarshBrakeNotification;
+  final Duration _notificationCooldown = const Duration(seconds: 5);
+
+  // Variables for session summary
   DateTime? _sessionStart;
   DateTime? _sessionEnd;
 
@@ -55,6 +59,10 @@ class VehicleMonitorService {
   int _harshAccelEvents = 0;
   int _harshBrakeEvents = 0;
 
+  // Crash detection state
+  bool _crashDetectionTriggered = false;
+  DateTime? _lastCrashDetection;
+  final Duration _crashCooldown = const Duration(seconds: 30); // 30 second cooldown between crashes
 
   Future<void> startMonitoring({
     required BuildContext context,
@@ -69,7 +77,7 @@ class VehicleMonitorService {
     _userId = userId;
     _vehicleId = vehicleId;
 
-    //session summary values reset
+    // Session summary values reset
     _sessionStart = DateTime.now();
     _sessionEnd = null;
     _maxSpeed = 0.0;
@@ -77,7 +85,7 @@ class VehicleMonitorService {
     _speedCount = 0;
     _harshAccelEvents = 0;
     _harshBrakeEvents = 0;
-
+    _crashDetectionTriggered = false;
 
     ref.read(vehicleMonitorProvider.notifier).setVehicle(vehicleId);
     ref.read(vehicleMonitorProvider.notifier).setMake(make);
@@ -92,107 +100,105 @@ class VehicleMonitorService {
       print('Failed to enable wakelock: $e');
     }
 
+    // Start UI update timer (updates every 500ms instead of every sensor event)
+    _uiUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      if (_accelBuffer.isNotEmpty) {
+        double avgAccel = _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
+        ref.read(vehicleMonitorProvider.notifier).updateAcceleration(avgAccel);
+      }
+      ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
+      ref.read(vehicleMonitorProvider.notifier).updateDistance(totalDistanceMeters);
+    });
 
     _accelSub = userAccelerometerEvents.listen((event) {
       currentAcceleration = event;
 
-      // Only horizontal movement (X and Y)
-      double horizontalAccel = sqrt(event.x *event.x + event.y * event.y);
-      if((event.x+event.y)<0){
-        horizontalAccel*=-1;
+      // Simplified horizontal acceleration calculation
+      double horizontalAccel = sqrt(event.x * event.x + event.y * event.y);
+
+      // Determine direction based on dominant axis
+      if (event.y < 0) {
+        horizontalAccel *= -1; // Negative for deceleration
       }
-      // double horizontalDecel = event.y;
 
       _accelBuffer.add(horizontalAccel);
       if (_accelBuffer.length > _acBufferSize) {
-        _accelBuffer.removeAt(0); // keep buffer size fixed
+        _accelBuffer.removeAt(0);
       }
 
-      int negcount=0;
-      int poscount=0;
-      for(int i=0; i<_accelBuffer.length-1; i++){
-        if((_accelBuffer[i]<0)&&(_accelBuffer[i+1]>0)){
-          negcount++;
-        }else{
-          poscount++;
+      // Only check for harsh events if buffer is full
+      if (_accelBuffer.length == _acBufferSize) {
+        double avgAccel = _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
+
+        // Harsh acceleration check with cooldown
+        if (avgAccel > accelerationThreshold) {
+          _harshAccelEvents++;
+          if (_shouldSendNotification(_lastHarshAccelNotification)) {
+            _lastHarshAccelNotification = DateTime.now();
+            sendNotification(
+                "Woah Buddy! Easy on the Gas",
+                "Acceleration: ${avgAccel.toStringAsFixed(2)} m/s²"
+            );
+          }
         }
-      }
+        // Harsh braking check with cooldown
+        else if (avgAccel < decelerationThreshold) {
+          _harshBrakeEvents++;
+          if (_shouldSendNotification(_lastHarshBrakeNotification)) {
+            _lastHarshBrakeNotification = DateTime.now();
+            sendNotification(
+                "Woah Buddy! Easy on the Brakes",
+                "Deceleration: ${avgAccel.toStringAsFixed(2)} m/s²"
+            );
+          }
+        }
 
-      double avgAccel = _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
-      if(negcount>poscount)
-        avgAccel*=-1;
-
-      ref.read(vehicleMonitorProvider.notifier).updateAcceleration(avgAccel);
-
-      if (avgAccel > accelerationThreshold) {
-        _harshAccelEvents++;
-        sendNotification("Woah Buddy! Easy on the Gas", "Acceleration: ${avgAccel.toStringAsFixed(2)} m/s²");
-      } else if (avgAccel < decelerationThreshold) {
-        _harshBrakeEvents++;
-        sendNotification("Woah Buddy! Easy on the Brakes", "Deceleration: ${avgAccel.toStringAsFixed(2)} m/s²");
+        // Check for crash - high acceleration fluctuation
+        _checkCrashFromAcceleration(context, avgAccel);
       }
     });
 
     // Check location permission
     LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
       permission = await Geolocator.requestPermission();
-      if (permission != LocationPermission.always && permission != LocationPermission.whileInUse) {
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
         print('Location permission not granted');
         return;
       }
     }
-
-
 
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.best,
         distanceFilter: 1,
       ),
-    ).listen((position) async {
-      final now =DateTime.now();
+    ).listen((position) {
+      final now = DateTime.now();
       currentSpeedKmh = position.speed * 3.6;
-      _maxSpeed = max(_maxSpeed, currentSpeedKmh);
-      ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
-      print('Speed: ${currentSpeedKmh.toStringAsFixed(2)} km/h');
 
-      // Store speed with time for checking duration of speed drop // like 1 second mein more than 15 ka drop
+      // Track max speed
+      _maxSpeed = max(_maxSpeed, currentSpeedKmh);
+
+      // Track average speed
+      _speedSum += currentSpeedKmh;
+      _speedCount++;
+
+      // Store speed history for crash detection
       _speedHistory.add({
         'time': now,
         'speed': currentSpeedKmh,
       });
       if (_speedHistory.length > 10) _speedHistory.removeAt(0);
 
-      // Check for sudden // woi jo 2 length rkhi thi speed buffer ki
-      if (_speedHistory.length >= 0) {
-        // getting last two readings and unka time
-        final recent = _speedHistory[_speedHistory.length - 1];
-        final previous = _speedHistory[_speedHistory.length - 2];
-
-        final delTime = recent['time'].difference(previous['time']).inMilliseconds / 1000.0;
-        final delSpeed = recent[
-        'speed'] - previous['speed'];
-
-        // woi acceleration buffer saari k oper iterate kren gy
-        double accelFluctuation = 0;
-
-        for (int i=0;i<_accelBuffer.length-1;i++){
-          accelFluctuation+=_accelBuffer[i]-_accelBuffer[i+1];
-        }
-        print(delSpeed);
-        print(delTime);
-        print(accelFluctuation.abs());
-
-        if ((delSpeed < -15 && delTime < 1.5)||(accelFluctuation.abs()>3)) {
-          sendNotification("Crash Detected", "Possible impact detected");
-          // Idr ap crash detect hony k baad jo krna hai wo kr skty ho
-          CrashDetector.checkForCrash(context);
-        }
+      // Check for sudden speed drop (crash detection)
+      if (_speedHistory.length >= 2) {
+        _checkCrashFromSpeedDrop(context);
       }
 
-
-
+      // Calculate distance
       if (_lastPosition != null) {
         double distance = Geolocator.distanceBetween(
           _lastPosition!.latitude,
@@ -202,10 +208,6 @@ class VehicleMonitorService {
         );
 
         totalDistanceMeters += distance;
-        ref.read(vehicleMonitorProvider.notifier).updateDistance(totalDistanceMeters);
-        print('Distance: ${distance.toStringAsFixed(2)} m, Total: ${totalDistanceMeters.toStringAsFixed(2)} m');
-
-        await _updateVehicleMileage(distance);
       }
 
       _lastPosition = position;
@@ -214,27 +216,79 @@ class VehicleMonitorService {
     print('Monitoring started');
   }
 
-  Future<void> _updateVehicleMileage(double distanceMeters) async {
-    if (_userId == null || _vehicleId == null) return;
-
-    final firestore = FirebaseFirestore.instance;
-    final docRef = firestore.collection('users').doc(_userId).collection('vehicles').doc(_vehicleId);
-
-    final snapshot = await docRef.get();
-    if (!snapshot.exists) return;
-
-    double currentMileage = snapshot['mileage']?.toDouble() ?? 0.0;
-    double distanceKm = distanceMeters / 1000.0;
-
-    await docRef.update({'mileage': currentMileage + distanceKm});
-    print('Mileage updated: +${distanceKm.toStringAsFixed(2)} km');
+  bool _shouldSendNotification(DateTime? lastNotification) {
+    if (lastNotification == null) return true;
+    return DateTime.now().difference(lastNotification) > _notificationCooldown;
   }
 
-  void stopMonitoring(WidgetRef ref, double distance) async {
+  void _checkCrashFromAcceleration(BuildContext context, double avgAccel) {
+    if (_crashDetectionTriggered) return;
+
+    // Calculate acceleration fluctuation
+    if (_accelBuffer.length < 2) return;
+
+    double accelFluctuation = 0;
+    for (int i = 0; i < _accelBuffer.length - 1; i++) {
+      accelFluctuation += (_accelBuffer[i] - _accelBuffer[i + 1]).abs();
+    }
+
+    // If high jitter/fluctuation detected
+    if (accelFluctuation > 15) {
+      _triggerCrashDetection(context);
+    }
+  }
+
+  void _checkCrashFromSpeedDrop(BuildContext context) {
+    if (_crashDetectionTriggered) return;
+    if (_speedHistory.length < 2) return;
+
+    final recent = _speedHistory[_speedHistory.length - 1];
+    final previous = _speedHistory[_speedHistory.length - 2];
+
+    final delTime = recent['time'].difference(previous['time']).inMilliseconds / 1000.0;
+    final delSpeed = recent['speed'] - previous['speed'];
+
+    // Sudden speed drop > 15 km/h in < 1.5 seconds
+    if (delSpeed < -15 && delTime < 1.5) {
+      _triggerCrashDetection(context);
+    }
+  }
+
+  void _triggerCrashDetection(BuildContext context) {
+    // Check cooldown to prevent crash spam
+    if (_lastCrashDetection != null &&
+        DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
+      print("Crash detection cooldown active - ignoring trigger");
+      return;
+    }
+
+    _crashDetectionTriggered = true;
+    _lastCrashDetection = DateTime.now();
+    print("CRASH DETECTED - Triggering crash protocol");
+
+    sendNotification("Crash Detected", "Possible impact detected");
+
+    // Run crash detection on next frame to avoid blocking
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) {
+        CrashDetector.checkForCrash(
+          context,
+          onDialogClosed: () {
+            // Reset crash detection flag after user responds
+            print("Crash dialog closed - resetting crash detection flag");
+            _crashDetectionTriggered = false;
+          },
+        );
+      }
+    });
+  }
+
+  Future<void> stopMonitoring(WidgetRef ref) async {
     _accelSub?.cancel();
     _positionSub?.cancel();
+    _uiUpdateTimer?.cancel();
+
     _lastPosition = null;
-    totalDistanceMeters = 0.0;
     _isMonitoring = false;
 
     try {
@@ -246,17 +300,30 @@ class VehicleMonitorService {
 
     final summary = generateSessionSummary();
 
-    generateGoalFromSummary(summary);
+    // Update mileage ONCE when stopping (instead of every GPS update)
+    await _updateVehicleMileageOnStop(totalDistanceMeters);
 
-    calculateDrivingScore(avgSpeed: summary["avgSpeed"], harshAccel: summary["harshAccelerations"], harshBrakes: summary["harshBrakes"], durationMinutes: summary["duration"]);
+    // Generate goals based on session
+    await generateGoalFromSummary(summary);
 
-    //Save summary to Firestore
+    // Calculate driving score
+    await calculateDrivingScore(
+      avgSpeed: summary["avgSpeed"],
+      harshAccel: summary["harshAccelerations"],
+      harshBrakes: summary["harshBrakes"],
+      durationMinutes: summary["duration"],
+    );
+
+    // Save summary to Firestore
     final firestore = FirebaseFirestore.instance;
-    await firestore.collection('users').doc(_userId)
-        .collection('sessions').add(summary);
+    await firestore
+        .collection('users')
+        .doc(_userId)
+        .collection('sessions')
+        .add(summary);
 
-    final docRef = firestore.collection('users').doc(_userId).collection('vehicles').doc(_vehicleId);
-    await docRef.update({'mileage': distance});
+    // Reset distance
+    totalDistanceMeters = 0.0;
 
     ref.read(vehicleMonitorProvider.notifier).clear();
 
@@ -264,7 +331,31 @@ class VehicleMonitorService {
     sendNotification("RAXXY", "Monitoring service stopped");
   }
 
-  Map<String, dynamic> generateSessionSummary()  {
+  Future<void> _updateVehicleMileageOnStop(double totalDistanceMeters) async {
+    if (_userId == null || _vehicleId == null) return;
+
+    final firestore = FirebaseFirestore.instance;
+    final docRef = firestore
+        .collection('users')
+        .doc(_userId)
+        .collection('vehicles')
+        .doc(_vehicleId);
+
+    try {
+      final snapshot = await docRef.get();
+      if (!snapshot.exists) return;
+
+      double currentMileage = snapshot['mileage']?.toDouble() ?? 0.0;
+      double distanceKm = totalDistanceMeters / 1000.0;
+
+      await docRef.update({'mileage': currentMileage + distanceKm});
+      print('Mileage updated: +${distanceKm.toStringAsFixed(2)} km');
+    } catch (e) {
+      print('Error updating mileage: $e');
+    }
+  }
+
+  Map<String, dynamic> generateSessionSummary() {
     _sessionEnd = DateTime.now();
 
     double avgSpeed = _speedCount > 0 ? _speedSum / _speedCount : 0.0;
@@ -287,7 +378,7 @@ class VehicleMonitorService {
     final firestore = FirebaseFirestore.instance;
     final userId = _userId;
 
-    List<Map<String, dynamic>> current_goals =[] ;
+    List<Map<String, dynamic>> currentGoals = [];
 
     try {
       final querySnapshot = await firestore
@@ -296,40 +387,39 @@ class VehicleMonitorService {
           .collection('goals')
           .get();
 
-      current_goals = querySnapshot.docs
+      currentGoals = querySnapshot.docs
           .map((doc) => {
         'id': doc.id,
         ...doc.data(),
-      }).toList();
+      })
+          .toList();
 
-      print("Fetched ${current_goals.length} goals for user $userId");
+      print("Fetched ${currentGoals.length} goals for user $userId");
     } catch (e) {
       print("Error fetching goals: $e");
+      return;
     }
 
     final int accHarshEvents = (summary["harshAccelerations"] ?? 0);
     final int brHarshEvents = (summary["harshBrakes"] ?? 0);
     final int durationMinutes = summary["duration"] ?? 0;
 
-    print(durationMinutes);
-
     if (durationMinutes == 0) return;
 
     double accEventsPerMinute = accHarshEvents / durationMinutes;
-    print(accEventsPerMinute);
     double brEventsPerMinute = brHarshEvents / durationMinutes;
-    print(brEventsPerMinute);
 
-    //Deleting completed goals
-    for (var goal in current_goals) {
-      if ((goal["title"] == "Improve Smooth Throttle" &&
-          goal["target"] ==
-              "Drive with fewer than ${durationMinutes * 0.2} harsh events" &&
-          accEventsPerMinute < 0.2)||(goal["title"] == "Improve Smooth Braking" &&
-          goal["target"] ==
-              "Drive with fewer than ${durationMinutes * 0.2} harsh events" &&
-          brEventsPerMinute < 0.2)) {
+    // Delete completed goals
+    for (var goal in currentGoals) {
+      bool shouldDelete = false;
 
+      if (goal["title"] == "Improve Smooth Throttle" && accEventsPerMinute < 0.2) {
+        shouldDelete = true;
+      } else if (goal["title"] == "Improve Smooth Braking" && brEventsPerMinute < 0.2) {
+        shouldDelete = true;
+      }
+
+      if (shouldDelete) {
         await firestore
             .collection('users')
             .doc(userId)
@@ -341,19 +431,19 @@ class VehicleMonitorService {
       }
     }
 
-    //If more than 0.2 events per minute, add a goal
+    // Add new goals if needed
     if (accEventsPerMinute > 0.2) {
       final goal = {
         "vehicleId": _vehicleId,
         "title": "Improve Smooth Throttle",
         "description": "Reduce harsh acceleration in your next trips.",
         "createdAt": FieldValue.serverTimestamp(),
-        "target": "Drive with fewer than ${durationMinutes * 0.2} harsh events",
+        "target": "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
       };
 
-      if(current_goals.isNotEmpty&&(!goalExists(current_goals, goal))){
+      if (!goalExists(currentGoals, goal)) {
         await firestore.collection("users").doc(userId).collection("goals").add(goal);
-        print("New goal generated: $goal");
+        print("New goal generated: ${goal['title']}");
       }
     }
 
@@ -363,20 +453,19 @@ class VehicleMonitorService {
         "title": "Improve Smooth Braking",
         "description": "Reduce harsh braking in your next trips.",
         "createdAt": FieldValue.serverTimestamp(),
-        "target": "Drive with fewer than ${durationMinutes * 0.2} harsh events",
+        "target": "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
       };
 
-      if(current_goals.isNotEmpty&&(!goalExists(current_goals, goal))){
+      if (!goalExists(currentGoals, goal)) {
         await firestore.collection("users").doc(userId).collection("goals").add(goal);
-        print("New goal generated: $goal");
+        print("New goal generated: ${goal['title']}");
       }
     }
   }
 
   bool goalExists(List<Map<String, dynamic>> goals, Map<String, dynamic> newGoal) {
     return goals.any((g) =>
-    g["title"] == newGoal["title"] &&
-        g["target"] == newGoal["target"]);
+    g["title"] == newGoal["title"] && g["vehicleId"] == newGoal["vehicleId"]);
   }
 
   Future<void> calculateDrivingScore({
@@ -391,42 +480,40 @@ class VehicleMonitorService {
 
     double sessionScore = 100.0;
 
-    // Penalize harsh events / kaand pr danda x1
+    // Penalize harsh events
     int totalHarshEvents = harshAccel + harshBrakes;
     sessionScore -= totalHarshEvents * 2;
 
-    // Penalize unsafe speeds / kaand pr danda x2
+    // Penalize unsafe speeds
     if (avgSpeed > 100) {
-      sessionScore -= (avgSpeed - 100) * 0.5; // too fast /DU DU DUDU
+      sessionScore -= (avgSpeed - 100) * 0.5;
     } else if (avgSpeed < 20) {
-      sessionScore -= (20 - avgSpeed) * 0.3; // too slow / stop-go / bich mein jaanu k msgs dekhny lg gya
+      sessionScore -= (20 - avgSpeed) * 0.3;
     }
 
-    // reward for longer trips /  not kaand pr itna tw chala k mereko kuch pta chly
+    // Reward for longer trips
     if (durationMinutes > 30) {
       sessionScore += 3;
     } else if (durationMinutes < 5) {
-      sessionScore -= 5; // too short to judge, thats what she said
+      sessionScore -= 5;
     }
 
-    sessionScore = sessionScore.clamp(0, 100); // dis shit clamps score from 0-100 / Its obvious dumbass, y u sweating to mention it?
+    sessionScore = sessionScore.clamp(0, 100);
 
     // Get current score
     final userDoc = firestore.collection('users').doc(userId);
     final snapshot = await userDoc.get();
-    double currentScore = (snapshot.data()?['drivingScore'] ?? 50).toDouble(); // if not then return 50
+    double currentScore = (snapshot.data()?['drivingScore'] ?? 50).toDouble();
 
-    // Weighted update, Ik session ka Score gradually effect kry ga total score ko so *0.1
+    // Weighted update
     double newGlobalScore = currentScore + (sessionScore - 50) * 0.1;
     newGlobalScore = newGlobalScore.clamp(0, 100);
-
 
     await userDoc.set({'drivingScore': newGlobalScore}, SetOptions(merge: true));
 
     print('Session Score: $sessionScore');
     print('Updated Global Driving Score: $newGlobalScore');
   }
-
 
   bool get isMonitoring => _isMonitoring;
 }

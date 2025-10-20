@@ -180,12 +180,7 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                                                                 onPressed: () {
                                                                   VehicleMonitorService()
                                                                       .stopMonitoring(
-                                                                    ref,
-                                                                    double.parse(
-                                                                      mileageController
-                                                                          .text
-                                                                          .trim(),
-                                                                    ),
+                                                                    ref
                                                                   );
                                                                   monitoringVehicleId =
                                                                   null;
@@ -237,11 +232,6 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                                                                   VehicleMonitorService()
                                                                       .stopMonitoring(
                                                                     ref,
-                                                                    double.parse(
-                                                                      mileageController
-                                                                          .text
-                                                                          .trim(),
-                                                                    ),
                                                                   );
                                                                   monitoringVehicleId =
                                                                   null;

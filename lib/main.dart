@@ -8,7 +8,6 @@ import 'package:raxxy/firebase_options.dart';
 import 'package:raxxy/providers/theme_provider.dart';
 import 'package:raxxy/services/notifications_services.dart';
 import 'bottom_nav_bar.dart';
-import 'package:workmanager/workmanager.dart';
 import 'services/crash_detector.dart';
 import 'package:telephony/telephony.dart';
 
@@ -25,19 +24,6 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await initNotifications();
-
-  await Workmanager().initialize(
-
-  callbackDispatcher,
-
-    isInDebugMode: true,
-  );
-
-  await Workmanager().registerPeriodicTask(
-    "1",
-    "crashCheckTask",
-    frequency: Duration(minutes: 1),
-  );
 
   runApp(const ProviderScope(child: MyApp()));
 }
