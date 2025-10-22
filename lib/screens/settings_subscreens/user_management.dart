@@ -27,23 +27,6 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
           child: Column(
             children: [
               SizedBox(height: 20.h,),
-              // Container(
-              //   height: 100.h,
-              //   width: 110.w,
-              //   decoration: BoxDecoration(
-              //     borderRadius: BorderRadius.circular(100.r),
-              //     color: Theme.of(context).cardColor,
-              //     boxShadow: [
-              //       BoxShadow(
-              //         color: Colors.black.withOpacity(0.3),
-              //         blurRadius: 4,
-              //         spreadRadius: 3,
-              //       ),
-              //     ],
-              //   ),
-              //   child: Icon(Icons.camera_alt, size: 80.r,color: Color(0xffb2b0ff),),
-              // ),
-              // SizedBox(height: 20.h,),
               Container(
                 height: 50.h,
                 width: MediaQuery.of(context).size.width - 40,

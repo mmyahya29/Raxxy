@@ -227,13 +227,13 @@ class VehicleMonitorService {
     // Calculate acceleration fluctuation
     if (_accelBuffer.length < 2) return;
 
-    double accelFluctuation = 0;
-    for (int i = 0; i < _accelBuffer.length - 1; i++) {
-      accelFluctuation += (_accelBuffer[i] - _accelBuffer[i + 1]).abs();
-    }
+    double accelFluctuation = _accelBuffer[_accelBuffer.length-1]-_accelBuffer[_accelBuffer.length-2];
+    // for (int i = 0; i < _accelBuffer.length - 1; i++) {
+    //   accelFluctuation += (_accelBuffer[i] - _accelBuffer[i + 1]).abs();
+    // }
 
     // If high jitter/fluctuation detected
-    if (accelFluctuation > 15) {
+    if (accelFluctuation.abs() > 1) {
       _triggerCrashDetection(context);
     }
   }

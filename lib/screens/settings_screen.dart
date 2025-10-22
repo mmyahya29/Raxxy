@@ -1,10 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import 'package:raxxy/screens/settings_subscreens/user_management.dart';
 import '../providers/provider.dart';
+import '../providers/safety_feature_provider.dart';
 import '../providers/theme_provider.dart';
+import '../widgets/reusable_widgets.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
@@ -16,11 +19,14 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
+  final emNumController = TextEditingController();
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.read(firebaseAuthProvider);
     final username = auth.currentUser?.displayName ?? 'No Name';
     final themeMode = ref.watch(themeNotifierProvider);
+    final crash = ref.watch(featureNotifierProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -99,40 +105,63 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),),
                 ),
               ),
-              // SizedBox(height: 10.h,),
-              // Container(
-              //   height: 50.h,
-              //   width: MediaQuery.of(context).size.width - 40,
-              //   decoration: BoxDecoration(
-              //     borderRadius: BorderRadius.circular(20.r),
-              //     color: Theme.of(context).cardColor,
-              //     boxShadow: [
-              //       BoxShadow(
-              //         color: Colors.black.withOpacity(0.3),
-              //         blurRadius: 4,
-              //         spreadRadius: 3,
-              //       ),
-              //     ],
-              //   ),
-              //   child: ElevatedButton(
-              //     style: ElevatedButton.styleFrom(
-              //       backgroundColor: Theme.of(context).cardColor,
-              //       shape: RoundedRectangleBorder(
-              //         borderRadius: BorderRadius.circular(20.r),
-              //       ),
-              //
-              //     ),
-              //     onPressed: () {
-              //
-              //     },
-              //     child: Text("Bleh",
-              //       style: TextStyle(
-              //         fontSize: 20.sp,
-              //         fontWeight: FontWeight.w700,
-              //       ),),
-              //   ),
-              // ),
+
               SizedBox(height: 10.h,),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeInOut,
+                child: Column(
+                  children: [
+                    SizedBox(height: 10.h),
+                    Container(
+                      height: 50.h,
+                      width: MediaQuery.of(context).size.width - 40,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20.r),
+                        color: Color(0xff202020),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 4,
+                            spreadRadius: 3,
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          ref.read(featureNotifierProvider.notifier).togglefeature();
+                        },
+                        child: Text(
+                          'Crash Detection: ${(crash == false) ? 'Disabled' : 'Enabled'}',
+                          style: TextStyle(
+                            fontSize: 20.sp,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xffffffff),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 10.h),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      child: crash ? Column(
+                        children: [
+                          buildTextField(
+                            context,
+                            emNumController,
+                            "Phone Number",
+                                () => setState(() {}),
+                          ),
+                          SizedBox(height: 10.h),
+                          buildButton("save", ()=>{saveEmergency(), Navigator.pop(context)}, null),
+                        ],
+                      ): const SizedBox.shrink(),
+                    )
+                  ],
+                ),
+              ),
+              SizedBox(height:10.h),
               Container(
                 height: 50.h,
                 width: MediaQuery.of(context).size.width - 40,
@@ -181,5 +210,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> saveEmergency() async {
+    final auth = ref.read(firebaseAuthProvider);
+    final firestore = FirebaseFirestore.instance;
+    final userDoc = firestore.collection('users').doc(auth.currentUser!.uid);
+    //final snapshot = await userDoc.get();
+    // double currentScore = (snapshot.data()?['emergencyContact'] ?? 50).toDouble();
+    try {
+      await userDoc.set({
+        'emergencyContact': emNumController.text.trim(),
+      }, SetOptions(merge: true));
+
+    } catch (e) {
+      print(e);
+    }
   }
 }
