@@ -32,9 +32,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: AppBar(
         title: const Text('Settings'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0).r,
-        child: SingleChildScrollView(
+
           child: Column(
             children: [
               SizedBox(height: 10.h,),
@@ -181,7 +182,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     await auth.signOut();
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xffb10000),
+                    backgroundColor: const Color(0xFF8A2E3B),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20.0),
                     ),

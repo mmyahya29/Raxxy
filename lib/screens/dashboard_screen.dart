@@ -24,13 +24,12 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
-      body: Padding(
+      body: SingleChildScrollView(
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0).r,
-        child: SingleChildScrollView(
-          child: Column(
+        child: Column(
             children: [
               SizedBox(height: 10.h),
               Container(

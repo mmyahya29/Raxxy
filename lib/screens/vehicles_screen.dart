@@ -305,6 +305,7 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                             ),
                           );
                         },
+                        clipBehavior: Clip.none,
                       );
                     },
                     loading: () =>
@@ -356,6 +357,8 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                     Icon(Icons.add_circle,
                         size: 30.r, color: Color(0xffffffff)),
                   ],
+
+
                 ),
               ),
             ),

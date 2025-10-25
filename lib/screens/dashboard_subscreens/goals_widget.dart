@@ -12,6 +12,7 @@ Widget goalsWidget(BuildContext context, VoidCallback rebuild){
   return Container(
     height: 300.h,
     width: MediaQuery.of(context).size.width - 40,
+    clipBehavior: Clip.none,
     decoration: BoxDecoration(
       color: Theme.of(context).cardColor,
       borderRadius: BorderRadius.circular(30.r),

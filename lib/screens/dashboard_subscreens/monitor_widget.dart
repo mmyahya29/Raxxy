@@ -22,6 +22,8 @@ Widget monitorWidget(BuildContext context, DashboardScreen widget){
           return Container(
             height: 50.h,
             width: MediaQuery.of(context).size.width - 40,
+            clipBehavior: Clip.none,
+
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(30.r),
@@ -67,7 +69,7 @@ Widget monitorWidget(BuildContext context, DashboardScreen widget){
                 height: 120.h,
                 width: MediaQuery.of(context).size.width - 60,
                 decoration: BoxDecoration(
-                  color: const Color(0xff007e0f),
+                  color: const Color(0xFFCFD3EA), // Pastel dark grey accent
                   borderRadius: BorderRadius.circular(30.r),
                   boxShadow: [
                     BoxShadow(

@@ -103,7 +103,7 @@ class CrashDetector {
         try {
           await telephony.sendSms(
             to: emergencyContact,
-            message: "🚨 EMERGENCY: I've been in an accident and need help! This is an automated message from RAXXY.",
+            message: " EMERGENCY: I've been in an accident and need help! This is an automated message from RAXXY.",
           );
           print("Emergency SMS sent to $emergencyContact");
         } catch (e) {
