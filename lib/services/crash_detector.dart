@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import '../main.dart';
-import 'package:telephony/telephony.dart';
 import 'package:vibration/vibration.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_sms/flutter_sms.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../providers/goals_provider.dart';
+import '../providers/safety_feature_provider.dart';
 
 class CrashDetector {
   static Timer? countdownTimer;
@@ -12,18 +15,17 @@ class CrashDetector {
   static int remainingSeconds = 15;
   static final AudioPlayer audioPlayer = AudioPlayer();
   static bool _isActive = false;
+  static BuildContext? _dialogContext;
 
-  static Future<void> checkForCrash(BuildContext context, {VoidCallback? onDialogClosed}) async {
-    // Prevent multiple simultaneous crash detections
-    if (_isActive) {
-      print("CrashDetector: Already active, ignoring duplicate trigger");
-      return;
-    }
-
+  static Future<void> checkForCrash(
+      BuildContext context,
+      WidgetRef ref, {
+        VoidCallback? onDialogClosed,
+      }) async {
+    if (_isActive) return;
     _isActive = true;
-    print("CrashDetector: Crash detection initiated");
-
     remainingSeconds = 15;
+    print("CrashDetector: Crash detection initiated");
 
     // Stage 1: Initial vibration (2 seconds)
     if (await Vibration.hasVibrator() ?? false) {
@@ -37,95 +39,150 @@ class CrashDetector {
       }
     });
 
-    // Stage 3: Final vibration + sound after 10 seconds
+    // Stage 3: Final vibration after 10 seconds
     vibrationTimer2 = Timer(const Duration(seconds: 10), () async {
       if (await Vibration.hasVibrator() ?? false) {
         Vibration.vibrate(duration: 3000);
       }
-      // Uncomment to play alert sound
+      // Uncomment to play alert sound:
       // await audioPlayer.play(AssetSource('sounds/alert.mp3'));
     });
 
     // Start countdown
-    _startCountdown(context);
+    _startCountdown(onDialogClosed, ref);
 
-    // Show dialog (non-blocking)
+    // Show dialog
     if (context.mounted) {
-      _showCrashDialog(context, onDialogClosed: onDialogClosed);
+      _showCrashDialog(context, ref, onDialogClosed: onDialogClosed);
     }
   }
 
-  static void _showCrashDialog(BuildContext context, {VoidCallback? onDialogClosed}) {
+  static void _showCrashDialog(
+      BuildContext parentContext,
+      WidgetRef ref, {
+        VoidCallback? onDialogClosed,
+      }) {
     showDialog(
-      context: context,
+      context: parentContext,
       barrierDismissible: false,
       builder: (dialogContext) {
+        _dialogContext = dialogContext;
         return _CrashDialogContent(
           onDismiss: () {
             _cancelCountdown();
+            _closeDialog();
             _isActive = false;
-            if (dialogContext.mounted) {
-              Navigator.of(dialogContext).pop();
-            }
-            // Reset crash detection flag in monitoring service
             onDialogClosed?.call();
           },
-          onSendHelp: () {
-            _sendHelp(dialogContext);
-            // Reset crash detection flag in monitoring service
+          onSendHelp: () async {
+            await _sendHelp(ref);
             onDialogClosed?.call();
           },
         );
       },
     ).then((_) {
-      // Ensure cleanup when dialog is dismissed
       _isActive = false;
-      onDialogClosed?.call();
+      _dialogContext = null;
     });
   }
 
-  static void _sendHelp(BuildContext context) async {
+  static Future<void> _sendHelp(WidgetRef ref) async {
     _cancelCountdown();
     _isActive = false;
-
-    if (context.mounted) {
-      Navigator.of(context).pop();
-    }
+    _closeDialog();
 
     await audioPlayer.stop();
-
     print("CrashDetector: Sending emergency help");
 
-    String emergencyContact = "+923091163059"; // Replace with user's emergency contact
+    // Get emergency contact from preferences
+    final prefs = ref.read(sharedPreferencesProvider);
+    String? emergencyContact =prefs.getString('emergency_contact');
 
-    if (emergencyContact.isNotEmpty) {
-      if (smsPermissionGranted) {
-        try {
-          await telephony.sendSms(
-            to: emergencyContact,
-            message: " EMERGENCY: I've been in an accident and need help! This is an automated message from RAXXY.",
-          );
-          print("Emergency SMS sent to $emergencyContact");
-        } catch (e) {
-          print("Failed to send SMS: $e");
-        }
-      } else {
-        print("SMS Permission not granted");
-      }
+    // Validate phone number
+    if (emergencyContact == null || emergencyContact.isEmpty || emergencyContact == 'null') {
+      print("❌ No emergency contact configured");
+      return;
+    }
+
+    // Ensure proper format: +92XXXXXXXXXX (remove leading 0 if present)
+    if (emergencyContact.startsWith("0")) {
+      emergencyContact = "+92${emergencyContact.substring(1)}";
+    } else if (!emergencyContact.startsWith("+")) {
+      emergencyContact = "+92$emergencyContact";
+    }
+
+    print("Attempting to send SMS to: $emergencyContact");
+
+    String message =
+        "🚨 EMERGENCY: I've been in an accident and need help! This is an automated message from RAXXY.";
+
+    // Try Method 1: flutter_sms (Direct send)
+    bool sentDirectly = await _sendViaSMS(emergencyContact, message);
+
+    // If direct send failed, fallback to Method 2: url_launcher (Open SMS app)
+    if (!sentDirectly) {
+      print("⚠️ Direct SMS failed, opening SMS app as fallback...");
+      await _openSMSApp(emergencyContact, message);
     } else {
-      print("No emergency contact configured");
     }
   }
 
-  static void _startCountdown(BuildContext context) {
+  /// Method 1: Send SMS directly using flutter_sms
+  static Future<bool> _sendViaSMS(String contact, String message) async {
+    try {
+      String result = await sendSMS(
+        message: message,
+        recipients: [contact],
+        sendDirect: true,
+      );
+
+      print("✅ SMS sent directly: $result");
+      return true;
+    } catch (e) {
+      print("❌ Direct SMS failed: $e");
+      return false;
+    }
+  }
+
+  /// Method 2: Fallback - Open default SMS app
+  static Future<void> _openSMSApp(String contact, String message) async {
+    try {
+      final Uri smsUri = Uri(
+        scheme: 'sms',
+        path: contact,
+        queryParameters: {'body': message},
+      );
+
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri);
+        print("✅ SMS app opened successfully");
+      } else {
+        print("❌ Cannot launch SMS app");
+      }
+    } catch (e) {
+      print("❌ Failed to open SMS app: $e");
+    }
+  }
+
+  static void _startCountdown(VoidCallback? onDialogClosed, WidgetRef ref) {
     countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       remainingSeconds--;
-
       if (remainingSeconds <= 0) {
         timer.cancel();
-        _sendHelp(context);
+        print("CrashDetector: Countdown finished — auto-sending help");
+        _sendHelp(ref);
+        onDialogClosed?.call();
       }
     });
+  }
+
+  static void _closeDialog() {
+    if (_dialogContext != null &&
+        _dialogContext!.mounted &&
+        Navigator.of(_dialogContext!).canPop()) {
+      Navigator.of(_dialogContext!).pop();
+      print("CrashDetector: Dialog closed safely");
+    }
   }
 
   static void _cancelCountdown() {
@@ -134,19 +191,16 @@ class CrashDetector {
     vibrationTimer2?.cancel();
     audioPlayer.stop();
     Vibration.cancel();
-
-    print("CrashDetector: Countdown cancelled");
   }
 
-  // Reset method for testing or manual cleanup
   static void reset() {
     _cancelCountdown();
     _isActive = false;
     remainingSeconds = 15;
+    _dialogContext = null;
   }
 }
 
-// Separate StatefulWidget for dialog to handle countdown updates
 class _CrashDialogContent extends StatefulWidget {
   final VoidCallback onDismiss;
   final VoidCallback onSendHelp;
@@ -166,13 +220,8 @@ class _CrashDialogContentState extends State<_CrashDialogContent> {
   @override
   void initState() {
     super.initState();
-    // Update UI every second to show countdown
     _uiUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {});
-      } else {
-        timer.cancel();
-      }
+      if (mounted) setState(() {});
     });
   }
 

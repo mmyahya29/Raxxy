@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:raxxy/providers/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final featureNotifierProvider =
@@ -33,3 +34,21 @@ class featureNotifier extends StateNotifier<bool> {
     await prefs.setString("safety", state.toString());
   }
 }
+
+final emergencyContactProvider = StreamProvider<String?>((ref) {
+  final auth = ref.read(firebaseAuthProvider);
+  final firestore = ref.read(firestoreProvider);
+
+  final userId = auth.currentUser?.uid;
+  if (userId == null) return const Stream.empty();
+
+  return firestore
+      .collection('users')
+      .doc(userId)
+      .snapshots()
+      .map((doc) => doc.data()?['emergencyContact'] as String?);
+});
+
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
+  throw UnimplementedError();
+});

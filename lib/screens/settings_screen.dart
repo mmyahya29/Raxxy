@@ -1,3 +1,5 @@
+import 'dart:ffi';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +29,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final username = auth.currentUser?.displayName ?? 'No Name';
     final themeMode = ref.watch(themeNotifierProvider);
     final crash = ref.watch(featureNotifierProvider);
+    final prefs = ref.read(sharedPreferencesProvider);
+    String? emergencyContact = prefs.getString('emergency_contact');
+    emNumController.text=emergencyContact!;
 
     return Scaffold(
       appBar: AppBar(
@@ -65,7 +70,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     children: [
                       Icon(Icons.person_rounded, size: 80.r, color: Color(0xffb2b0ff),),
                       SizedBox(width: 5.w,),
-                      Text(username, style: TextStyle(fontSize: 26.sp, fontWeight: FontWeight.w600),),
+                      Text(username, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 26.sp, fontWeight: FontWeight.w600),),
                       SizedBox(width: 60.w,)
                     ],
                   ),
@@ -101,6 +106,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ? "Switch to Light Mode"
                       : "Switch to Dark Mode",
                     style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
                       fontSize: 20.sp,
                       fontWeight: FontWeight.w700,
                     ),),
@@ -108,60 +114,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
 
               SizedBox(height: 10.h,),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 500),
-                curve: Curves.easeInOut,
-                child: Column(
-                  children: [
-                    SizedBox(height: 10.h),
-                    Container(
-                      height: 50.h,
-                      width: MediaQuery.of(context).size.width - 40,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20.r),
-                        color: Color(0xff202020),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
-                            blurRadius: 4,
-                            spreadRadius: 3,
-                          ),
-                        ],
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+            child: Column(
+              children: [
+                SizedBox(height: 10.h),
+                Container(
+                  height: 50.h,
+                  width: MediaQuery.of(context).size.width - 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20.r),
+                    color: Theme.of(context).cardColor,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 4,
+                        spreadRadius: 3,
                       ),
-                      child: ElevatedButton(
-                        onPressed: () {
-                          ref.read(featureNotifierProvider.notifier).togglefeature();
-                        },
-                        child: Text(
-                          'Crash Detection: ${(crash == false) ? 'Disabled' : 'Enabled'}',
-                          style: TextStyle(
-                            fontSize: 20.sp,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xffffffff),
-                          ),
-                        ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).cardColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20.r),
                       ),
                     ),
-                    SizedBox(height: 10.h),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      child: crash ? Column(
-                        children: [
-                          buildTextField(
-                            context,
-                            emNumController,
-                            "Phone Number",
-                                () => setState(() {}),
-                          ),
-                          SizedBox(height: 10.h),
-                          buildButton("save", ()=>{saveEmergency(), Navigator.pop(context)}, null),
-                        ],
-                      ): const SizedBox.shrink(),
-                    )
-                  ],
+                    onPressed: () {
+                      ref.read(featureNotifierProvider.notifier).togglefeature();
+                    },
+                    child: Text(
+                      'Crash Detection: ${(crash == false) ? 'Disabled' : 'Enabled'}',
+                      style: TextStyle(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                SizedBox(height: 10.h),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: crash ? Column(
+                    children: [
+                      buildTextField(
+                        context,
+                        emNumController,
+                        "Phone Number",
+                            () => setState(() {}),
+                      ),
+                      SizedBox(height: 10.h),
+                      buildButton("save", saveEmergency, null),
+                    ],
+                  ): const SizedBox.shrink(),
+                )
+              ],
+            ),
+          ),
               SizedBox(height:10.h),
               Container(
                 height: 50.h,
@@ -217,15 +229,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final auth = ref.read(firebaseAuthProvider);
     final firestore = FirebaseFirestore.instance;
     final userDoc = firestore.collection('users').doc(auth.currentUser!.uid);
-    //final snapshot = await userDoc.get();
-    // double currentScore = (snapshot.data()?['emergencyContact'] ?? 50).toDouble();
+    final prefs = ref.read(sharedPreferencesProvider);
+
     try {
       await userDoc.set({
         'emergencyContact': emNumController.text.trim(),
       }, SetOptions(merge: true));
 
+      await prefs.setString('emergency_contact', emNumController.text.trim());
+      print("${emNumController.text.trim()} added to database");
+
     } catch (e) {
       print(e);
     }
+  }
+
+  Future<String> getEmergency() async {
+    final auth = ref.read(firebaseAuthProvider);
+    final firestore = FirebaseFirestore.instance;
+    final userDoc = firestore.collection('users').doc(auth.currentUser!.uid);
+    final snapshot = await userDoc.get();
+    String contact = snapshot.data()?['emergencyContact'];
+    return contact;
   }
 }

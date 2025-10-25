@@ -1,0 +1,56 @@
+group 'com.example.flutter_sms'
+version '1.0-SNAPSHOT'
+
+buildscript {
+    ext.kotlin_version = '1.9.24'   // ✅ Match modern Flutter Kotlin version
+    repositories {
+        google()
+        mavenCentral()              // ✅ Replace deprecated jcenter
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.1'  // ✅ Match modern Gradle plugin
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace 'com.example.flutter_sms'
+    compileSdkVersion 34  // ✅ Matches your Flutter SDK
+
+    defaultConfig {
+        minSdkVersion 21
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"  // ✅ Ensures consistent JVM target
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    lint {
+        disable 'InvalidPackage'
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"  // ✅ Modern stdlib
+}

@@ -34,8 +34,8 @@ dependencies:
   sensors_plus: ^6.1.1
   geolocator: ^12.0.0
 
-  telephony:
-    path: packages/telephony-0.2.0
+  flutter_sms:
+    path: packages/flutter_sms-2.3.3
 
 
   #  vibration : ^1.8.4
@@ -64,6 +64,7 @@ dependencies:
   audioplayers: ^6.5.1
   vibration: ^3.1.4
   wakelock_plus: ^1.4.0
+
 
 
 

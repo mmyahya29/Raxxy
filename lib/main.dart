@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:raxxy/providers/safety_feature_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:raxxy/providers/provider.dart';
 import 'package:raxxy/authorization_screens/login_screen.dart';
 import 'package:raxxy/firebase_options.dart';
@@ -9,29 +11,61 @@ import 'package:raxxy/providers/theme_provider.dart';
 import 'package:raxxy/services/notifications_services.dart';
 import 'bottom_nav_bar.dart';
 import 'services/crash_detector.dart';
-import 'package:telephony/telephony.dart';
-
-final Telephony telephony = Telephony.instance;
-bool smsPermissionGranted = false;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  smsPermissionGranted = await telephony.requestPhoneAndSmsPermissions ?? false;
 
+  // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize SharedPreferences
+  final sharedPreferences = await SharedPreferences.getInstance();
 
   await initNotifications();
 
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Sync emergency contact on app start
+    _syncEmergencyContact();
+  }
+
+  Future<void> _syncEmergencyContact() async {
+    // Listen to the emContactProvider once to get the value
+    ref.listen(emergencyContactProvider, (previous, next) {
+      next.whenData((contact) {
+        if (contact != null) {
+          // Save to SharedPreferences
+          final prefs = ref.read(sharedPreferencesProvider);
+          prefs.setString('emergency_contact', contact);
+          print('Emergency contact synced to SharedPreferences: $contact');
+        }
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final themeMode = ref.watch(themeNotifierProvider);
 
@@ -86,7 +120,8 @@ class MyApp extends ConsumerWidget {
 
         cardTheme: CardThemeData(
           elevation: 4,
-          shadowColor: Color(0xFF9FA8DA).withOpacity(0.3),
+          color: Color(0xFF9FA8DA),
+          shadowColor: Color(0xFF000000).withOpacity(0.3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -120,7 +155,7 @@ class MyApp extends ConsumerWidget {
             elevation: 3,
             shadowColor: Color(0xFF9FA8DA).withOpacity(0.3),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(20.r),
             ),
           ),
         ),
@@ -131,9 +166,26 @@ class MyApp extends ConsumerWidget {
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xff434343),
         primaryColor: Colors.blueGrey[900],
+
         colorScheme: const ColorScheme.dark(
           primary: Colors.white,
           secondary: Colors.tealAccent,
+        ),
+
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFB8C5E6),
+            foregroundColor: const Color(0xFF2C3E6E),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 12,
+            ),
+            elevation: 3,
+            shadowColor: Color(0xFF9FA8DA).withOpacity(0.3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20.r),
+            ),
+          ),
         ),
       ),
 

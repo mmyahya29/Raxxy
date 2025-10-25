@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../providers/provider.dart';
+import '../providers/safety_feature_provider.dart';
 import 'notifications_services.dart';
 
 class VehicleMonitorService {
@@ -16,8 +17,11 @@ class VehicleMonitorService {
   final ValueNotifier<double> currentAccelerationNotifier = ValueNotifier(0.0);
   final ValueNotifier<double> currentDistanceNotifier = ValueNotifier(0.0);
 
-  static final VehicleMonitorService _instance = VehicleMonitorService._internal();
+  static final VehicleMonitorService _instance =
+      VehicleMonitorService._internal();
+
   factory VehicleMonitorService() => _instance;
+
   VehicleMonitorService._internal();
 
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
@@ -48,6 +52,10 @@ class VehicleMonitorService {
   DateTime? _lastHarshBrakeNotification;
   final Duration _notificationCooldown = const Duration(seconds: 5);
 
+  // Crash detection cooldown
+  DateTime? _lastCrashDetection;
+  final Duration _crashCooldown = const Duration(seconds: 10);
+
   // Variables for session summary
   DateTime? _sessionStart;
   DateTime? _sessionEnd;
@@ -58,11 +66,6 @@ class VehicleMonitorService {
 
   int _harshAccelEvents = 0;
   int _harshBrakeEvents = 0;
-
-  // Crash detection state
-  bool _crashDetectionTriggered = false;
-  DateTime? _lastCrashDetection;
-  final Duration _crashCooldown = const Duration(seconds: 30); // 30 second cooldown between crashes
 
   Future<void> startMonitoring({
     required BuildContext context,
@@ -85,11 +88,12 @@ class VehicleMonitorService {
     _speedCount = 0;
     _harshAccelEvents = 0;
     _harshBrakeEvents = 0;
-    _crashDetectionTriggered = false;
+    _lastCrashDetection = null;
 
     ref.read(vehicleMonitorProvider.notifier).setVehicle(vehicleId);
     ref.read(vehicleMonitorProvider.notifier).setMake(make);
     ref.read(vehicleMonitorProvider.notifier).setModel(model);
+    final crashFeature = ref.watch(featureNotifierProvider);
 
     sendNotification("RAXXY", "Monitoring service started");
 
@@ -103,11 +107,14 @@ class VehicleMonitorService {
     // Start UI update timer (updates every 500ms instead of every sensor event)
     _uiUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
       if (_accelBuffer.isNotEmpty) {
-        double avgAccel = _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
+        double avgAccel =
+            _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
         ref.read(vehicleMonitorProvider.notifier).updateAcceleration(avgAccel);
       }
       ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
-      ref.read(vehicleMonitorProvider.notifier).updateDistance(totalDistanceMeters);
+      ref
+          .read(vehicleMonitorProvider.notifier)
+          .updateDistance(totalDistanceMeters);
     });
 
     _accelSub = userAccelerometerEvents.listen((event) {
@@ -128,7 +135,8 @@ class VehicleMonitorService {
 
       // Only check for harsh events if buffer is full
       if (_accelBuffer.length == _acBufferSize) {
-        double avgAccel = _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
+        double avgAccel =
+            _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
 
         // Harsh acceleration check with cooldown
         if (avgAccel > accelerationThreshold) {
@@ -136,8 +144,8 @@ class VehicleMonitorService {
           if (_shouldSendNotification(_lastHarshAccelNotification)) {
             _lastHarshAccelNotification = DateTime.now();
             sendNotification(
-                "Woah Buddy! Easy on the Gas",
-                "Acceleration: ${avgAccel.toStringAsFixed(2)} m/s²"
+              "Woah Buddy! Easy on the Gas",
+              "Acceleration: ${avgAccel.toStringAsFixed(2)} m/s²",
             );
           }
         }
@@ -147,14 +155,16 @@ class VehicleMonitorService {
           if (_shouldSendNotification(_lastHarshBrakeNotification)) {
             _lastHarshBrakeNotification = DateTime.now();
             sendNotification(
-                "Woah Buddy! Easy on the Brakes",
-                "Deceleration: ${avgAccel.toStringAsFixed(2)} m/s²"
+              "Woah Buddy! Easy on the Brakes",
+              "Deceleration: ${avgAccel.toStringAsFixed(2)} m/s²",
             );
           }
         }
 
         // Check for crash - high acceleration fluctuation
-        _checkCrashFromAcceleration(context, avgAccel);
+        if (crashFeature == true) {
+          _checkCrashFromAcceleration(context, ref,avgAccel);
+        }
       }
     });
 
@@ -187,15 +197,12 @@ class VehicleMonitorService {
       _speedCount++;
 
       // Store speed history for crash detection
-      _speedHistory.add({
-        'time': now,
-        'speed': currentSpeedKmh,
-      });
+      _speedHistory.add({'time': now, 'speed': currentSpeedKmh});
       if (_speedHistory.length > 10) _speedHistory.removeAt(0);
 
       // Check for sudden speed drop (crash detection)
-      if (_speedHistory.length >= 2) {
-        _checkCrashFromSpeedDrop(context);
+      if (crashFeature == true && _speedHistory.length >= 2) {
+        _checkCrashFromSpeedDrop(context, ref);
       }
 
       // Calculate distance
@@ -221,48 +228,49 @@ class VehicleMonitorService {
     return DateTime.now().difference(lastNotification) > _notificationCooldown;
   }
 
-  void _checkCrashFromAcceleration(BuildContext context, double avgAccel) {
-    if (_crashDetectionTriggered) return;
+  void _checkCrashFromAcceleration(BuildContext context,WidgetRef ref,  double avgAccel) {
+    // Check if enough time has passed since last crash detection
+    if (_lastCrashDetection != null &&
+        DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
+      return;
+    }
 
     // Calculate acceleration fluctuation
     if (_accelBuffer.length < 2) return;
 
-    double accelFluctuation = _accelBuffer[_accelBuffer.length-1]-_accelBuffer[_accelBuffer.length-2];
-    // for (int i = 0; i < _accelBuffer.length - 1; i++) {
-    //   accelFluctuation += (_accelBuffer[i] - _accelBuffer[i + 1]).abs();
-    // }
+    double accelFluctuation =
+        _accelBuffer[_accelBuffer.length - 1] -
+        _accelBuffer[_accelBuffer.length - 2];
 
     // If high jitter/fluctuation detected
     if (accelFluctuation.abs() > 1) {
-      _triggerCrashDetection(context);
+      _triggerCrashDetection(context ,ref);
     }
   }
 
-  void _checkCrashFromSpeedDrop(BuildContext context) {
-    if (_crashDetectionTriggered) return;
+  void _checkCrashFromSpeedDrop(BuildContext context, WidgetRef ref) {
+    // Check if enough time has passed since last crash detection
+    if (_lastCrashDetection != null &&
+        DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
+      return;
+    }
+
     if (_speedHistory.length < 2) return;
 
     final recent = _speedHistory[_speedHistory.length - 1];
     final previous = _speedHistory[_speedHistory.length - 2];
 
-    final delTime = recent['time'].difference(previous['time']).inMilliseconds / 1000.0;
+    final delTime =
+        recent['time'].difference(previous['time']).inMilliseconds / 1000.0;
     final delSpeed = recent['speed'] - previous['speed'];
 
     // Sudden speed drop > 15 km/h in < 1.5 seconds
     if (delSpeed < -15 && delTime < 1.5) {
-      _triggerCrashDetection(context);
+      _triggerCrashDetection(context, ref);
     }
   }
 
-  void _triggerCrashDetection(BuildContext context) {
-    // Check cooldown to prevent crash spam
-    if (_lastCrashDetection != null &&
-        DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
-      print("Crash detection cooldown active - ignoring trigger");
-      return;
-    }
-
-    _crashDetectionTriggered = true;
+  void _triggerCrashDetection(BuildContext context, WidgetRef ref) {
     _lastCrashDetection = DateTime.now();
     print("CRASH DETECTED - Triggering crash protocol");
 
@@ -273,10 +281,10 @@ class VehicleMonitorService {
       if (context.mounted) {
         CrashDetector.checkForCrash(
           context,
+          ref,
           onDialogClosed: () {
-            // Reset crash detection flag after user responds
-            print("Crash dialog closed - resetting crash detection flag");
-            _crashDetectionTriggered = false;
+            // No need to reset flag anymore as we're using cooldown
+            print("Crash dialog closed");
           },
         );
       }
@@ -301,105 +309,115 @@ class VehicleMonitorService {
     final summary = generateSessionSummary();
 
     // Update mileage ONCE when stopping (instead of every GPS update)
-    await _updateVehicleMileageOnStop(totalDistanceMeters);
+    if (_userId != null && _vehicleId != null) {
+      try {
+        final firestore = FirebaseFirestore.instance;
+        final vehicleDoc = firestore
+            .collection('users')
+            .doc(_userId)
+            .collection('vehicles')
+            .doc(_vehicleId);
 
-    // Generate goals based on session
-    await generateGoalFromSummary(summary);
+        await firestore.runTransaction((transaction) async {
+          final snapshot = await transaction.get(vehicleDoc);
+          if (snapshot.exists) {
+            final currentMileage = snapshot.data()?['mileage'] ?? 0;
+            transaction.update(vehicleDoc, {
+              'mileage': currentMileage + (totalDistanceMeters / 1000).round(),
+            });
+          }
+        });
 
-    // Calculate driving score
-    await calculateDrivingScore(
-      avgSpeed: summary["avgSpeed"],
-      harshAccel: summary["harshAccelerations"],
-      harshBrakes: summary["harshBrakes"],
-      durationMinutes: summary["duration"],
-    );
+        // Save trip summary
+        await vehicleDoc.collection('trips').add(summary);
 
-    // Save summary to Firestore
-    final firestore = FirebaseFirestore.instance;
-    await firestore
-        .collection('users')
-        .doc(_userId)
-        .collection('sessions')
-        .add(summary);
+        // Update driving score
+        await _updateDrivingScore();
 
-    // Reset distance
-    totalDistanceMeters = 0.0;
+        // Generate goals based on session performance
+        await _generateGoals();
+      } catch (e) {
+        print('Failed to update vehicle data: $e');
+      }
+    }
 
     ref.read(vehicleMonitorProvider.notifier).clear();
-
     print('Monitoring stopped');
-    sendNotification("RAXXY", "Monitoring service stopped");
-  }
-
-  Future<void> _updateVehicleMileageOnStop(double totalDistanceMeters) async {
-    if (_userId == null || _vehicleId == null) return;
-
-    final firestore = FirebaseFirestore.instance;
-    final docRef = firestore
-        .collection('users')
-        .doc(_userId)
-        .collection('vehicles')
-        .doc(_vehicleId);
-
-    try {
-      final snapshot = await docRef.get();
-      if (!snapshot.exists) return;
-
-      double currentMileage = snapshot['mileage']?.toDouble() ?? 0.0;
-      double distanceKm = totalDistanceMeters / 1000.0;
-
-      await docRef.update({'mileage': currentMileage + distanceKm});
-      print('Mileage updated: +${distanceKm.toStringAsFixed(2)} km');
-    } catch (e) {
-      print('Error updating mileage: $e');
-    }
   }
 
   Map<String, dynamic> generateSessionSummary() {
     _sessionEnd = DateTime.now();
-
-    double avgSpeed = _speedCount > 0 ? _speedSum / _speedCount : 0.0;
-    double distanceKm = totalDistanceMeters / 1000.0;
-    Duration duration = _sessionEnd!.difference(_sessionStart!);
+    final avgSpeed = _speedCount > 0 ? _speedSum / _speedCount : 0;
 
     return {
-      "startTime": _sessionStart,
-      "endTime": _sessionEnd,
-      "duration": duration.inMinutes,
-      "distanceKm": distanceKm,
-      "maxSpeed": _maxSpeed,
-      "avgSpeed": avgSpeed,
-      "harshAccelerations": _harshAccelEvents,
-      "harshBrakes": _harshBrakeEvents,
+      'startTime': _sessionStart,
+      'endTime': _sessionEnd,
+      'duration': _sessionEnd!.difference(_sessionStart!).inMinutes,
+      'distanceKm': totalDistanceMeters / 1000,
+      'maxSpeedKmh': _maxSpeed,
+      'avgSpeedKmh': avgSpeed,
+      'harshAccelerations': _harshAccelEvents,
+      'harshBrakes': _harshBrakeEvents,
     };
   }
 
-  Future<void> generateGoalFromSummary(Map<String, dynamic> summary) async {
-    final firestore = FirebaseFirestore.instance;
-    final userId = _userId;
+  Future<void> _updateDrivingScore() async {
+    if (_userId == null) return;
 
-    List<Map<String, dynamic>> currentGoals = [];
+    final firestore = FirebaseFirestore.instance;
+    final userDoc = firestore.collection('users').doc(_userId);
 
     try {
-      final querySnapshot = await firestore
-          .collection('users')
-          .doc(userId)
-          .collection('goals')
-          .get();
+      await firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(userDoc);
+        if (!snapshot.exists) return;
 
-      currentGoals = querySnapshot.docs
-          .map((doc) => {
-        'id': doc.id,
-        ...doc.data(),
-      })
-          .toList();
+        double currentScore = snapshot.data()?['drivingScore'] ?? 50.0;
 
-      print("Fetched ${currentGoals.length} goals for user $userId");
+        // Calculate penalty based on harsh events per minute
+        final duration = _sessionEnd!.difference(_sessionStart!).inMinutes;
+        if (duration == 0) return;
+
+        final harshEventsPerMinute =
+            (_harshAccelEvents + _harshBrakeEvents) / duration;
+
+        // Adjust score based on performance
+        double scoreAdjustment;
+        if (harshEventsPerMinute <= 0.1) {
+          scoreAdjustment = 1.0; // Good driving
+        } else if (harshEventsPerMinute <= 0.3) {
+          scoreAdjustment = 0.0; // Neutral
+        } else {
+          scoreAdjustment = -1.0; // Poor driving
+        }
+
+        // Update score (clamped between 0-100)
+        double newScore = (currentScore + scoreAdjustment).clamp(0.0, 100.0);
+
+        transaction.update(userDoc, {'drivingScore': newScore});
+      });
     } catch (e) {
-      print("Error fetching goals: $e");
-      return;
+      print('Failed to update driving score: $e');
     }
+  }
 
+  Future<void> _generateGoals() async {
+    if (_userId == null || _vehicleId == null) return;
+
+    final firestore = FirebaseFirestore.instance;
+    final goalsCollection = firestore
+        .collection('users')
+        .doc(_userId)
+        .collection('goals');
+
+    // Get current goals
+    final currentGoalsSnapshot = await goalsCollection.get();
+    final currentGoals =
+        currentGoalsSnapshot.docs
+            .map((doc) => {...doc.data(), 'id': doc.id})
+            .toList();
+
+    final summary = generateSessionSummary();
     final int accHarshEvents = (summary["harshAccelerations"] ?? 0);
     final int brHarshEvents = (summary["harshBrakes"] ?? 0);
     final int durationMinutes = summary["duration"] ?? 0;
@@ -413,16 +431,18 @@ class VehicleMonitorService {
     for (var goal in currentGoals) {
       bool shouldDelete = false;
 
-      if (goal["title"] == "Improve Smooth Throttle" && accEventsPerMinute < 0.2) {
+      if (goal["title"] == "Improve Smooth Throttle" &&
+          accEventsPerMinute < 0.2) {
         shouldDelete = true;
-      } else if (goal["title"] == "Improve Smooth Braking" && brEventsPerMinute < 0.2) {
+      } else if (goal["title"] == "Improve Smooth Braking" &&
+          brEventsPerMinute < 0.2) {
         shouldDelete = true;
       }
 
       if (shouldDelete) {
         await firestore
             .collection('users')
-            .doc(userId)
+            .doc(_userId)
             .collection('goals')
             .doc(goal["id"])
             .delete();
@@ -438,11 +458,16 @@ class VehicleMonitorService {
         "title": "Improve Smooth Throttle",
         "description": "Reduce harsh acceleration in your next trips.",
         "createdAt": FieldValue.serverTimestamp(),
-        "target": "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
+        "target":
+            "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
       };
 
       if (!goalExists(currentGoals, goal)) {
-        await firestore.collection("users").doc(userId).collection("goals").add(goal);
+        await firestore
+            .collection("users")
+            .doc(_userId)
+            .collection("goals")
+            .add(goal);
         print("New goal generated: ${goal['title']}");
       }
     }
@@ -453,67 +478,29 @@ class VehicleMonitorService {
         "title": "Improve Smooth Braking",
         "description": "Reduce harsh braking in your next trips.",
         "createdAt": FieldValue.serverTimestamp(),
-        "target": "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
+        "target":
+            "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
       };
 
       if (!goalExists(currentGoals, goal)) {
-        await firestore.collection("users").doc(userId).collection("goals").add(goal);
+        await firestore
+            .collection("users")
+            .doc(_userId)
+            .collection("goals")
+            .add(goal);
         print("New goal generated: ${goal['title']}");
       }
     }
   }
 
-  bool goalExists(List<Map<String, dynamic>> goals, Map<String, dynamic> newGoal) {
-    return goals.any((g) =>
-    g["title"] == newGoal["title"] && g["vehicleId"] == newGoal["vehicleId"]);
+  bool goalExists(
+    List<Map<String, dynamic>> goals,
+    Map<String, dynamic> newGoal,
+  ) {
+    return goals.any(
+      (goal) =>
+          goal["title"] == newGoal["title"] &&
+          goal["vehicleId"] == newGoal["vehicleId"],
+    );
   }
-
-  Future<void> calculateDrivingScore({
-    required double avgSpeed,
-    required int harshAccel,
-    required int harshBrakes,
-    required int durationMinutes,
-  }) async {
-    final firestore = FirebaseFirestore.instance;
-    final userId = _userId;
-    if (userId == null) return;
-
-    double sessionScore = 100.0;
-
-    // Penalize harsh events
-    int totalHarshEvents = harshAccel + harshBrakes;
-    sessionScore -= totalHarshEvents * 2;
-
-    // Penalize unsafe speeds
-    if (avgSpeed > 100) {
-      sessionScore -= (avgSpeed - 100) * 0.5;
-    } else if (avgSpeed < 20) {
-      sessionScore -= (20 - avgSpeed) * 0.3;
-    }
-
-    // Reward for longer trips
-    if (durationMinutes > 30) {
-      sessionScore += 3;
-    } else if (durationMinutes < 5) {
-      sessionScore -= 5;
-    }
-
-    sessionScore = sessionScore.clamp(0, 100);
-
-    // Get current score
-    final userDoc = firestore.collection('users').doc(userId);
-    final snapshot = await userDoc.get();
-    double currentScore = (snapshot.data()?['drivingScore'] ?? 50).toDouble();
-
-    // Weighted update
-    double newGlobalScore = currentScore + (sessionScore - 50) * 0.1;
-    newGlobalScore = newGlobalScore.clamp(0, 100);
-
-    await userDoc.set({'drivingScore': newGlobalScore}, SetOptions(merge: true));
-
-    print('Session Score: $sessionScore');
-    print('Updated Global Driving Score: $newGlobalScore');
-  }
-
-  bool get isMonitoring => _isMonitoring;
 }

@@ -43,7 +43,8 @@ Widget summaryWidget(BuildContext context, VoidCallback rebuild) {
                     height: 150.h,
                     width: MediaQuery.of(context).size.width - 60,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFCFD3EA),
+                      color: (Theme.of(context).brightness == Brightness.light )? Color(0xFFCFD3EA): Color(
+                          0xFF363E50),
                       borderRadius: BorderRadius.circular(30.r),
                     ),
                     child: Column(
