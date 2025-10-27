@@ -49,7 +49,7 @@ Widget goalsWidget(BuildContext context, VoidCallback rebuild){
                         .width - 60,
                     decoration: BoxDecoration(
                       color: (Theme.of(context).brightness == Brightness.light)?Color(
-                          0xffef9ee9):Color(0xff8c008a),
+                          0xffe6cbe3):Color(0xff655565),
                       borderRadius: BorderRadius.circular(30.r),
                     ),
                     child: Padding(

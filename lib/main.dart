@@ -164,28 +164,16 @@ class _MyAppState extends ConsumerState<MyApp> {
       // Dark Theme
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xff434343),
-        primaryColor: Colors.blueGrey[900],
+        scaffoldBackgroundColor: const Color(0xFF36303A),
+
+        // Main accent color (pastel blue)
+        primaryColor: const Color(0xFF2F3F47),
 
         colorScheme: const ColorScheme.dark(
-          primary: Colors.white,
-          secondary: Colors.tealAccent,
-        ),
-
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFB8C5E6),
-            foregroundColor: const Color(0xFF2C3E6E),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 12,
-            ),
-            elevation: 3,
-            shadowColor: Color(0xFF9FA8DA).withOpacity(0.3),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20.r),
-            ),
-          ),
+          primary: Color(0xFF000000),    // pastel blue
+          secondary: Color(0xFF31293E),   // pale lilac
+          // NOTE: 'tertiary' may not exist on older SDKs; if there's an error remove this line.
+          tertiary: Color(0xFF7986CB),    // darker blue for contrast
         ),
       ),
 

@@ -29,6 +29,7 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
               Text(
                 'Maintenance Logs',
                 style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w800),
+
               ),
               SizedBox(height: 5.h,),
               maintenanceLogWidget(context, () => setState(() {})),

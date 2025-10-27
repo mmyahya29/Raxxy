@@ -21,7 +21,25 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
+
   final emNumController = TextEditingController();
+
+
+  @override
+  void initState() {
+    super.initState();
+    // Sync emergency contact on app start
+    _syncEmergencyContact();
+  }
+
+  Future<void> _syncEmergencyContact() async {
+    // Listen to the emContactProvider once to get the value
+    final prefs = ref.read(sharedPreferencesProvider);
+    String? emergencyContact = prefs.getString('emergency_contact');
+    emNumController.text=emergencyContact!;
+
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -29,9 +47,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final username = auth.currentUser?.displayName ?? 'No Name';
     final themeMode = ref.watch(themeNotifierProvider);
     final crash = ref.watch(featureNotifierProvider);
-    final prefs = ref.read(sharedPreferencesProvider);
-    String? emergencyContact = prefs.getString('emergency_contact');
-    emNumController.text=emergencyContact!;
+
 
     return Scaffold(
       appBar: AppBar(
@@ -167,7 +183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             () => setState(() {}),
                       ),
                       SizedBox(height: 10.h),
-                      buildButton("save", saveEmergency, null),
+                      buildButton("save", ()=>{saveEmergency(), phoneValidator(emNumController.text.trim()) }, null),
                     ],
                   ): const SizedBox.shrink(),
                 )
@@ -224,6 +240,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
   }
+  String? phoneValidator(String? value) {
+    if (value == null || value.isEmpty) {
+      return "Phone number is required";
+    }
+
+    // Regex for +92 followed by 10 digits
+    final regex = RegExp(r'^\+92\d{10}$');
+
+    if (!regex.hasMatch(value)) {
+      return "Enter a valid number in +92XXXXXXXXXX format";
+    }
+
+    return null; // valid
+  }
+
 
   Future<void> saveEmergency() async {
     final auth = ref.read(firebaseAuthProvider);

@@ -35,25 +35,29 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
       PersistentBottomNavBarItem(
         icon: const Icon(Icons.dashboard),
         title: ("Dashboard"),
-        activeColorPrimary: Color(0xFF3F51B5),
+        activeColorPrimary: (Theme.of(context).brightness == Brightness.light)?Color(0xFF3F51B5):Color(
+            0xFF6D81CA),
         inactiveColorPrimary: Colors.grey,
       ),
       PersistentBottomNavBarItem(
         icon: const Icon(Icons.build),
         title: ("Maintenance"),
-        activeColorPrimary: Color(0xFF3F51B5),
+        activeColorPrimary: (Theme.of(context).brightness == Brightness.light)?Color(0xFF3F51B5):Color(
+            0xFF6D81CA),
         inactiveColorPrimary: Colors.grey,
       ),
       PersistentBottomNavBarItem(
         icon: const Icon(Icons.directions_car),
         title: ("Vehicles"),
-        activeColorPrimary: Color(0xFF3F51B5),
+        activeColorPrimary: (Theme.of(context).brightness == Brightness.light)?Color(0xFF3F51B5):Color(
+            0xFF6D81CA),
         inactiveColorPrimary: Colors.grey,
       ),
       PersistentBottomNavBarItem(
         icon: const Icon(Icons.settings),
         title: ("Settings"),
-        activeColorPrimary: Color(0xFF3F51B5),
+        activeColorPrimary: (Theme.of(context).brightness == Brightness.light)?Color(0xFF3F51B5):Color(
+            0xFF6D81CA),
         inactiveColorPrimary: Colors.grey,
       ),
     ];

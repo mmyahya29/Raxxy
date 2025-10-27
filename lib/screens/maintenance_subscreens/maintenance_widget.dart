@@ -54,11 +54,11 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
 
                   Color bgColor;
                   if (s["remaining"] <= 0) {
-                    bgColor = Color(0xffba0000);
+                    bgColor = Color(0xfc910505);
                   } else if (s["remaining"] <= 50) {
-                    bgColor = Color(0xffca3800);
+                    bgColor = Color(0xffca4918);
                   } else {
-                    bgColor = Color(0xff44ac00);
+                    bgColor = Color(0xff6ed826);
                   }
 
                   return Padding(
@@ -136,6 +136,7 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text("${s["name"]}", style: TextStyle(
+                              color:Colors.white,
                                 fontSize: 22.sp,
                                 fontWeight: FontWeight.w900),),
                             Row(
@@ -143,10 +144,10 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
                               children: [
                                 Text("${s["title"]}", style: TextStyle(
                                     fontSize: 18.sp,
-                                    fontWeight: FontWeight.w500),),
+                                    fontWeight: FontWeight.w500, color:Colors.white,),),
                                 Text("Remaining: ${s["remaining"].toStringAsFixed(2)} KM", style: TextStyle(
                                     fontSize: 18.sp,
-                                    fontWeight: FontWeight.w500),)
+                                    fontWeight: FontWeight.w500, color:Colors.white,),)
                               ],
                             )
                           ],
