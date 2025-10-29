@@ -38,11 +38,19 @@ class VehicleMonitorService {
 
   bool _isMonitoring = false;
 
-  final double accelerationThreshold = 1.5;
-  final double decelerationThreshold = -1.5;
+  // Updated threshold values for better reliability
+  final double accelerationThreshold = 2.0; // Increased from 1.5
+  final double decelerationThreshold = -2.0; // Increased from -1.5
 
   final List<double> _accelBuffer = [];
   final int _acBufferSize = 10;
+
+  // NEW filtering parameters to reduce false positives
+  final double minSpeedThreshold =
+      5.0; // km/h - only detect harsh events above this speed
+  final int sustainedSampleCount =
+      5; // Need 5 consecutive samples above threshold
+  final double jitterThreshold = 2.0; // Max std deviation to filter noise
 
   String? _userId;
   String? _vehicleId;
@@ -56,6 +64,10 @@ class VehicleMonitorService {
   DateTime? _lastCrashDetection;
   final Duration _crashCooldown = const Duration(seconds: 10);
 
+  // NEW tracking variables for sustained events
+  int _consecutiveHarshAccel = 0;
+  int _consecutiveHarshBrake = 0;
+
   // Variables for session summary
   DateTime? _sessionStart;
   DateTime? _sessionEnd;
@@ -66,6 +78,9 @@ class VehicleMonitorService {
 
   int _harshAccelEvents = 0;
   int _harshBrakeEvents = 0;
+
+  // Store BuildContext for scaffold messages
+  BuildContext? _monitoringContext;
 
   Future<void> startMonitoring({
     required BuildContext context,
@@ -79,6 +94,7 @@ class VehicleMonitorService {
     _isMonitoring = true;
     _userId = userId;
     _vehicleId = vehicleId;
+    _monitoringContext = context; // Store context for scaffold messages
 
     // Session summary values reset
     _sessionStart = DateTime.now();
@@ -89,6 +105,10 @@ class VehicleMonitorService {
     _harshAccelEvents = 0;
     _harshBrakeEvents = 0;
     _lastCrashDetection = null;
+
+    // Reset consecutive counters
+    _consecutiveHarshAccel = 0;
+    _consecutiveHarshBrake = 0;
 
     ref.read(vehicleMonitorProvider.notifier).setVehicle(vehicleId);
     ref.read(vehicleMonitorProvider.notifier).setMake(make);
@@ -117,54 +137,88 @@ class VehicleMonitorService {
           .updateDistance(totalDistanceMeters);
     });
 
+    // IMPROVED ACCELEROMETER LOGIC - More reliable harsh event detection
     _accelSub = userAccelerometerEvents.listen((event) {
       currentAcceleration = event;
 
-      // Simplified horizontal acceleration calculation
-      double horizontalAccel = sqrt(event.x * event.x + event.y * event.y);
+      // Use Y-axis as primary direction indicator (forward/backward)
+      // Positive = forward acceleration, Negative = braking/deceleration
+      double directedAccel = event.y;
 
-      // Determine direction based on dominant axis
-      if (event.y < 0) {
-        horizontalAccel *= -1; // Negative for deceleration
-      }
-
-      _accelBuffer.add(horizontalAccel);
+      _accelBuffer.add(directedAccel);
       if (_accelBuffer.length > _acBufferSize) {
         _accelBuffer.removeAt(0);
       }
 
-      // Only check for harsh events if buffer is full
-      if (_accelBuffer.length == _acBufferSize) {
+      // Only check for harsh events if buffer is full AND vehicle is moving
+      if (_accelBuffer.length == _acBufferSize &&
+          currentSpeedKmh > minSpeedThreshold) {
         double avgAccel =
             _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
 
-        // Harsh acceleration check with cooldown
+        // Calculate standard deviation to detect jitter/noise
+        double variance = 0;
+        for (double val in _accelBuffer) {
+          variance += pow(val - avgAccel, 2);
+        }
+        double stdDev = sqrt(variance / _accelBuffer.length);
+
+        // If too much jitter/noise, skip detection to avoid false positives
+        if (stdDev > jitterThreshold) {
+          _consecutiveHarshAccel = 0;
+          _consecutiveHarshBrake = 0;
+          return;
+        }
+
+        // Check for sustained harsh acceleration
         if (avgAccel > accelerationThreshold) {
-          _harshAccelEvents++;
-          if (_shouldSendNotification(_lastHarshAccelNotification)) {
-            _lastHarshAccelNotification = DateTime.now();
-            sendNotification(
-              "Woah Buddy! Easy on the Gas",
-              "Acceleration: ${avgAccel.toStringAsFixed(2)} m/s²",
-            );
+          _consecutiveHarshAccel++;
+          _consecutiveHarshBrake = 0; // Reset brake counter
+
+          // Only trigger if sustained over multiple samples
+          if (_consecutiveHarshAccel >= sustainedSampleCount) {
+            if (_shouldSendNotification(_lastHarshAccelNotification)) {
+              _harshAccelEvents++; // Only increment when actually notifying
+              _lastHarshAccelNotification = DateTime.now();
+              sendNotification(
+                "Woah Buddy! Easy on the Gas",
+                "Acceleration: ${avgAccel.toStringAsFixed(2)} m/s² at ${currentSpeedKmh.toStringAsFixed(0)} km/h",
+              );
+              _consecutiveHarshAccel = 0; // Reset after notification
+            }
           }
         }
-        // Harsh braking check with cooldown
+        // Check for sustained harsh braking
         else if (avgAccel < decelerationThreshold) {
-          _harshBrakeEvents++;
-          if (_shouldSendNotification(_lastHarshBrakeNotification)) {
-            _lastHarshBrakeNotification = DateTime.now();
-            sendNotification(
-              "Woah Buddy! Easy on the Brakes",
-              "Deceleration: ${avgAccel.toStringAsFixed(2)} m/s²",
-            );
+          _consecutiveHarshBrake++;
+          _consecutiveHarshAccel = 0; // Reset accel counter
+
+          // Only trigger if sustained over multiple samples
+          if (_consecutiveHarshBrake >= sustainedSampleCount) {
+            if (_shouldSendNotification(_lastHarshBrakeNotification)) {
+              _harshBrakeEvents++; // Only increment when actually notifying
+              _lastHarshBrakeNotification = DateTime.now();
+              sendNotification(
+                "Woah Buddy! Easy on the Brakes",
+                "Deceleration: ${avgAccel.toStringAsFixed(2)} m/s² at ${currentSpeedKmh.toStringAsFixed(0)} km/h",
+              );
+              _consecutiveHarshBrake = 0; // Reset after notification
+            }
           }
+        } else {
+          // Reset counters if we're in normal driving range
+          _consecutiveHarshAccel = 0;
+          _consecutiveHarshBrake = 0;
         }
 
         // Check for crash - high acceleration fluctuation
         if (crashFeature == true) {
-          _checkCrashFromAcceleration(context, ref,avgAccel);
+          _checkCrashFromAcceleration(context, ref, avgAccel);
         }
+      } else if (currentSpeedKmh <= minSpeedThreshold) {
+        // Reset counters when stationary or moving very slowly
+        _consecutiveHarshAccel = 0;
+        _consecutiveHarshBrake = 0;
       }
     });
 
@@ -228,7 +282,11 @@ class VehicleMonitorService {
     return DateTime.now().difference(lastNotification) > _notificationCooldown;
   }
 
-  void _checkCrashFromAcceleration(BuildContext context,WidgetRef ref,  double avgAccel) {
+  void _checkCrashFromAcceleration(
+    BuildContext context,
+    WidgetRef ref,
+    double avgAccel,
+  ) {
     // Check if enough time has passed since last crash detection
     if (_lastCrashDetection != null &&
         DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
@@ -244,7 +302,7 @@ class VehicleMonitorService {
 
     // If high jitter/fluctuation detected
     if (accelFluctuation.abs() > 1) {
-      _triggerCrashDetection(context ,ref);
+      _triggerCrashDetection(context, ref);
     }
   }
 
@@ -291,7 +349,8 @@ class VehicleMonitorService {
     });
   }
 
-  Future<void> stopMonitoring(WidgetRef ref) async {
+  // UPDATED: Added manualMileage parameter and scaffold messages for each task
+  Future<void> stopMonitoring(WidgetRef ref, {double? manualMileage}) async {
     _accelSub?.cancel();
     _positionSub?.cancel();
     _uiUpdateTimer?.cancel();
@@ -318,30 +377,102 @@ class VehicleMonitorService {
             .collection('vehicles')
             .doc(_vehicleId);
 
+        // Use manual mileage if provided, otherwise use GPS-calculated distance
+        final mileageToAdd = manualMileage ?? (totalDistanceMeters / 1000);
+
+        // Update vehicle mileage
         await firestore.runTransaction((transaction) async {
           final snapshot = await transaction.get(vehicleDoc);
           if (snapshot.exists) {
             final currentMileage = snapshot.data()?['mileage'] ?? 0;
             transaction.update(vehicleDoc, {
-              'mileage': currentMileage + (totalDistanceMeters / 1000).round(),
+              'mileage': currentMileage + mileageToAdd.round(),
             });
           }
         });
 
+        // Show success message for mileage update
+        if (_monitoringContext != null && _monitoringContext!.mounted) {
+          ScaffoldMessenger.of(_monitoringContext!).showSnackBar(
+            SnackBar(
+              content: Text(
+                '✅ Mileage updated: +${mileageToAdd.toStringAsFixed(2)} km',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+
+        // Small delay between messages
+        await Future.delayed(const Duration(milliseconds: 500));
+
         // Save trip summary
         await vehicleDoc.collection('trips').add(summary);
+
+        // Show success message for trip saved
+        if (_monitoringContext != null && _monitoringContext!.mounted) {
+          ScaffoldMessenger.of(_monitoringContext!).showSnackBar(
+            SnackBar(
+              content: Text(
+                '💾 Trip summary saved (${summary['duration']} min, ${summary['distanceKm'].toStringAsFixed(1)} km)',
+              ),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+
+        await Future.delayed(const Duration(milliseconds: 500));
 
         // Update driving score
         await _updateDrivingScore();
 
+        // Show success message for driving score
+        if (_monitoringContext != null && _monitoringContext!.mounted) {
+          ScaffoldMessenger.of(_monitoringContext!).showSnackBar(
+            SnackBar(
+              content: Text(
+                '📊 Driving score updated (${_harshAccelEvents} harsh accel, ${_harshBrakeEvents} harsh brakes)',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+
+        await Future.delayed(const Duration(milliseconds: 500));
+
         // Generate goals based on session performance
         await _generateGoals();
+
+        // Show success message for goals
+        if (_monitoringContext != null && _monitoringContext!.mounted) {
+          ScaffoldMessenger.of(_monitoringContext!).showSnackBar(
+            const SnackBar(
+              content: Text('🎯 Goals updated based on your performance'),
+              backgroundColor: Colors.purple,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       } catch (e) {
         print('Failed to update vehicle data: $e');
+        // Show error message
+        if (_monitoringContext != null && _monitoringContext!.mounted) {
+          ScaffoldMessenger.of(_monitoringContext!).showSnackBar(
+            SnackBar(
+              content: Text('❌ Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     }
 
     ref.read(vehicleMonitorProvider.notifier).clear();
+    _monitoringContext = null; // Clear context
     print('Monitoring stopped');
   }
 

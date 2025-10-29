@@ -9,8 +9,7 @@ import 'package:raxxy/screens/dashboard_screen.dart';
 import '../../providers/provider.dart';
 import '../../services/maintenance_service.dart';
 
-Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
-
+Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild) {
   final mileageController = TextEditingController();
 
   return Container(
@@ -40,13 +39,15 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
 
             final services = <Map<String, dynamic>>[];
 
-            for(int i=0;i<list.length;i++){
+            for (int i = 0; i < list.length; i++) {
               var v = list[i];
-              final serv = MaintenanceService.getMaintenanceStatusForVehicle(vehicle: v);
+              final serv = MaintenanceService.getMaintenanceStatusForVehicle(
+                vehicle: v,
+              );
               services.addAll(serv);
             }
 
-            if(services.isNotEmpty){
+            if (services.isNotEmpty) {
               return ListView.builder(
                 itemCount: services.length,
                 itemBuilder: (context, index) {
@@ -62,72 +63,97 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
                   }
 
                   return Padding(
-                    padding: const EdgeInsets.fromLTRB(0,0,0,10).r,
+                    padding: const EdgeInsets.fromLTRB(0, 0, 0, 10).r,
                     child: InkWell(
                       onTap: () async {
                         showDialog(
                           context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text(
-                                "Update Maintenance Event?"),
-                            content: Text("How do u want to update the Event?"),
-                            actions: [
-                              ElevatedButton(
-                                onPressed: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (ctx) => AlertDialog(
-                                      title: const Text(
-                                          "Enter mileage at the time of Event"),
-                                      content: TextField(
-                                        controller:
-                                        mileageController,
-                                        keyboardType:
-                                        TextInputType.number,
-                                        decoration:
-                                        const InputDecoration(
-                                          hintText: "Enter mileage",
-                                        ),
-                                      ),
-                                      actions: [
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            MaintenanceService().updateMaintenaceState(s["vehicleId"], ref, double.parse(mileageController.text.trim()), s["title"]);
-                                            rebuild();
-                                            Navigator.of(ctx)
-                                                .pop(true);
-                                          },
-                                          child: const Text("Okay"),
-                                        ),
-                                      ],
+                          builder:
+                              (ctx) => AlertDialog(
+                                title: const Text("Update Maintenance Event?"),
+                                content: Text(
+                                  "How do u want to update the Event?",
+                                ),
+                                actions: [
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      showDialog(
+                                        context: context,
+                                        builder:
+                                            (ctx) => AlertDialog(
+                                              title: const Text(
+                                                "Enter mileage at the time of Event",
+                                              ),
+                                              content: TextField(
+                                                controller: mileageController,
+                                                keyboardType:
+                                                    TextInputType.number,
+                                                decoration:
+                                                    const InputDecoration(
+                                                      hintText: "Enter mileage",
+                                                    ),
+                                              ),
+                                              actions: [
+                                                ElevatedButton(
+                                                  onPressed: () {
+                                                    MaintenanceService()
+                                                        .updateMaintenaceState(
+                                                          s["vehicleId"],
+                                                          ref,
+                                                          double.parse(
+                                                            mileageController
+                                                                .text
+                                                                .trim(),
+                                                          ),
+                                                          s["title"],
+                                                        );
+                                                    rebuild();
+                                                    Navigator.of(ctx).pop(true);
+                                                  },
+                                                  child: const Text("Okay"),
+                                                ),
+                                              ],
+                                            ),
+                                      );
+                                      MaintenanceService()
+                                          .updateMaintenaceState(
+                                            s["vehicleId"],
+                                            ref,
+                                            double.parse(
+                                              mileageController.text.trim(),
+                                            ),
+                                            s["title"],
+                                          );
+                                      rebuild();
+                                      Navigator.of(ctx).pop(true);
+                                    },
+                                    child: const Text(
+                                      "Enter mileage at the time of Event",
                                     ),
-                                  );
-                                  MaintenanceService().updateMaintenaceState(s["vehicleId"], ref, double.parse(mileageController.text.trim()), s["title"]);
-                                  rebuild();
-                                  Navigator.of(ctx)
-                                      .pop(true);
-                                },
-                                child: const Text("Enter mileage at the time of Event"),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      final distance =
+                                          (s["distance"] as num).toDouble();
+                                      MaintenanceService()
+                                          .updateMaintenaceState(
+                                            s['vehicleId'],
+                                            ref,
+                                            distance,
+                                            s["title"],
+                                          );
+                                      rebuild();
+                                      Navigator.of(ctx).pop(true);
+                                    },
+                                    child: const Text("Use current mileage"),
+                                  ),
+                                ],
                               ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  MaintenanceService().updateMaintenaceState(s['vehicleId'], ref, s["distance"], s["title"]);
-                                  rebuild();
-                                  Navigator.of(ctx)
-                                      .pop(true);
-                                },
-                                child: const Text("Use current mileage"),
-                              ),
-                            ],
-                          ),
                         );
                       },
                       child: Container(
                         height: 80.h,
-                        width: MediaQuery
-                            .of(context)
-                            .size
-                            .width - 60,
+                        width: MediaQuery.of(context).size.width - 60,
                         decoration: BoxDecoration(
                           color: bgColor,
                           borderRadius: BorderRadius.circular(30.r),
@@ -135,21 +161,35 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild){
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text("${s["name"]}", style: TextStyle(
-                              color:Colors.white,
+                            Text(
+                              "${s["name"]}",
+                              style: TextStyle(
+                                color: Colors.white,
                                 fontSize: 22.sp,
-                                fontWeight: FontWeight.w900),),
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                Text("${s["title"]}", style: TextStyle(
+                                Text(
+                                  "${s["title"]}",
+                                  style: TextStyle(
                                     fontSize: 18.sp,
-                                    fontWeight: FontWeight.w500, color:Colors.white,),),
-                                Text("Remaining: ${s["remaining"].toStringAsFixed(2)} KM", style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  "Remaining: ${s["remaining"].toStringAsFixed(2)} KM",
+                                  style: TextStyle(
                                     fontSize: 18.sp,
-                                    fontWeight: FontWeight.w500, color:Colors.white,),)
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ],
-                            )
+                            ),
                           ],
                         ),
                       ),
