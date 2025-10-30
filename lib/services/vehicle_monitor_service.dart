@@ -39,17 +39,17 @@ class VehicleMonitorService {
   bool _isMonitoring = false;
 
   // Updated threshold values for better reliability
-  final double accelerationThreshold = 2.0; // Increased from 1.5
-  final double decelerationThreshold = -2.0; // Increased from -1.5
+  final double accelerationThreshold = 2.0;
+  final double decelerationThreshold = -2.0;
 
   final List<double> _accelBuffer = [];
   final int _acBufferSize = 10;
 
   // NEW filtering parameters to reduce false positives
   final double minSpeedThreshold =
-      5.0; // km/h - only detect harsh events above this speed
+      0.0; // km/h - only detect harsh events above this speed
   final int sustainedSampleCount =
-      5; // Need 5 consecutive samples above threshold
+      1; // Need 5 consecutive samples above threshold
   final double jitterThreshold = 2.0; // Max std deviation to filter noise
 
   String? _userId;
