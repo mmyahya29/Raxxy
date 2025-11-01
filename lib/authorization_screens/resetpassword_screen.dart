@@ -31,11 +31,22 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       return;
     }
 
-    try {
-      await auth.sendPasswordResetEmail(email: email);
-      showMessage('Password reset email sent.');
-    } catch (e) {
-      showError(e.toString());
+    if (emailValidator(email)){
+      try {
+        await auth.sendPasswordResetEmail(email: email);
+        showMessage('Password reset email sent.');
+      } catch (e) {
+        showError(e.toString());
+      }
+    }else{
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("❌ Invalid Email"),
+          backgroundColor: Colors.red.shade400,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 

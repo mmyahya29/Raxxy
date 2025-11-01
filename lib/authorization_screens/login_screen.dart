@@ -21,29 +21,62 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final passwordController = TextEditingController();
 
   bool pashid=true;
+  bool isLoading = false;
 
   final auth = FirebaseAuth.instance;
   final firestore = FirebaseFirestore.instance;
+
 
   Future<void> authenticate() async {
     final auth = ref.read(firebaseAuthProvider);
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
+    if(emailValidator(email)){
     try {
+      setState(() {
+        isLoading = true;
+      });
       await auth.signInWithEmailAndPassword(email: email, password: password);
-    } catch (e) {
-      showError(e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Login Successful"),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      String? mess = getErrorMessage(e.code);
+      showError(mess);
     }
   }
+    else{
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Invalid Email"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+    }
 
   void showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
-
-  void showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
+  
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +129,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             buildTextField(context, passwordController, 'Password', () => setState(() {pashid=!pashid; print(pashid);}), obscure: pashid, pass: true),
             SizedBox(height: 20.h),
+            isLoading? Container(
+              height: 50.h,
+              width: 260.w,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20.r),
+                color: const Color(0xff664bff),
+              ),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                ),
+              ),
+            ):
             buildButton('Login', authenticate, null),
             SizedBox(height: 10.h),
             TextButton(

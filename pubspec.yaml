@@ -38,6 +38,8 @@ dependencies:
     path: packages/flutter_sms-2.3.3
 
 
+
+
   #  vibration : ^1.8.4
   flutter_local_notifications: ^18.0.1
   url_launcher: ^6.1.10
@@ -82,6 +84,8 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
+  flutter_native_splash: ^2.4.0
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -99,6 +103,7 @@ flutter:
     - assets/images/raxxy_icon_main.png
     - assets/images/raxxy_icon1.png
     - assets/data/mechanic_data.json
+    - assets/images/pica.png
   #   - assets/tflite_model.tflite
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -132,3 +137,11 @@ flutter_launcher_icons:
   image_path: "assets/images/raxxy_icon1.png"
   adaptive_icon_background: "#000000"  # optional, background color
   adaptive_icon_foreground: "assets/images/raxxy_icon1.png"
+
+flutter_native_splash:
+    color: "FFFFFF"
+    image: assets/images/raxxy_icon1.png
+    android_12:
+      color: "FFFFFF"
+      image: assets/images/raxxy_icon1.png
+

@@ -80,3 +80,34 @@ Widget buildButton(String text, VoidCallback onPressed, String? image, {Color co
     ),
   );
 }
+bool emailValidator(String? value) {
+  if (value == null || value.isEmpty) {
+    return false;
+  }
+
+  // Simple regex for basic email format validation
+  final regex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+
+  return regex.hasMatch(value);
+}
+
+String getErrorMessage(String errorCode) {
+  switch (errorCode) {
+    case 'user-not-found':
+      return 'No account found with this email';
+    case 'wrong-password':
+      return 'Incorrect password. Please try again';
+    case 'invalid-email':
+      return 'Please enter a valid email address';
+    case 'user-disabled':
+      return 'This account has been disabled';
+    case 'too-many-requests':
+      return 'Too many failed attempts. Please try again later';
+    case 'network-request-failed':
+      return 'Network error. Check your connection';
+    case 'invalid-credential':
+      return 'Invalid email or password. Please try again';
+    default:
+      return 'An error occurred. Please try again';
+  }
+}
