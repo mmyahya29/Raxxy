@@ -183,7 +183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             () => setState(() {}),
                       ),
                       SizedBox(height: 10.h),
-                      buildButton("save", ()=>{saveEmergency(), phoneValidator(emNumController.text.trim()) }, null),
+                      buildButton("save", saveEmergency, null),
                     ],
                   ): const SizedBox.shrink(),
                 )
@@ -240,40 +240,77 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
   }
-  String? phoneValidator(String? value) {
+  bool phoneValidator(String? value) {
     if (value == null || value.isEmpty) {
-      return "Phone number is required";
+      return false;
     }
 
     // Regex for +92 followed by 10 digits
     final regex = RegExp(r'^\+92\d{10}$');
 
     if (!regex.hasMatch(value)) {
-      return "Enter a valid number in +92XXXXXXXXXX format";
+      return false;
     }
 
-    return null; // valid
+    return true; // valid
   }
 
 
   Future<void> saveEmergency() async {
-    final auth = ref.read(firebaseAuthProvider);
-    final firestore = FirebaseFirestore.instance;
-    final userDoc = firestore.collection('users').doc(auth.currentUser!.uid);
-    final prefs = ref.read(sharedPreferencesProvider);
+  final auth = ref.read(firebaseAuthProvider);
+  final firestore = FirebaseFirestore.instance;
+  final userDoc = firestore.collection('users').doc(auth.currentUser!.uid);
+  final prefs = ref.read(sharedPreferencesProvider);
 
+  final phone = emNumController.text.trim();
+
+  if (phoneValidator(phone)) {
     try {
       await userDoc.set({
-        'emergencyContact': emNumController.text.trim(),
+        'emergencyContact': phone,
       }, SetOptions(merge: true));
 
-      await prefs.setString('emergency_contact', emNumController.text.trim());
-      print("${emNumController.text.trim()} added to database");
+      await prefs.setString('emergency_contact', phone);
 
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("✅ Emergency contact saved successfully!"),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+      print("$phone added to database");
     } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("❌ Failed to save contact. Please try again."),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
       print(e);
     }
+  } else {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("⚠️ Enter a valid number in +92XXXXXXXXXX format"),
+          backgroundColor: Colors.orange.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+    print("Enter a Valid number in +92XXXXXXXXXX");
   }
+}
+
 
   Future<String> getEmergency() async {
     final auth = ref.read(firebaseAuthProvider);
