@@ -21,24 +21,102 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final passwordController = TextEditingController();
 
   bool pashid=true;
+  bool isLoading = false;
 
   final auth = FirebaseAuth.instance;
   final firestore = FirebaseFirestore.instance;
 
+  bool isValidEmail(String email) {
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    return emailRegex.hasMatch(email);
+  }
+
+  String getErrorMessage(String errorCode) {
+    switch (errorCode) {
+      case 'user-not-found':
+        return 'No account found with this email';
+      case 'wrong-password':
+        return 'Incorrect password. Please try again';
+      case 'invalid-email':
+        return 'Please enter a valid email address';
+      case 'user-disabled':
+        return 'This account has been disabled';
+      case 'too-many-requests':
+        return 'Too many failed attempts. Please try again later';
+      case 'network-request-failed':
+        return 'Network error. Check your connection';
+      case 'invalid-credential':
+        return 'Invalid email or password. Please try again';
+      default:
+        return 'An error occurred. Please try again';
+    }
+  }
+
   Future<void> authenticate() async {
-    final auth = ref.read(firebaseAuthProvider);
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
+    // Validate inputs
+    if (email.isEmpty || password.isEmpty) {
+      showError('Please enter both email and password');
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      showError('Please enter a valid email address');
+      return;
+    }
+
+    // Show loading state
+    setState(() {
+      isLoading = true;
+    });
+
     try {
+      final auth = ref.read(firebaseAuthProvider);
       await auth.signInWithEmailAndPassword(email: email, password: password);
+      showSuccess('Login successful!');
+    } on FirebaseAuthException catch (e) {
+      showError(getErrorMessage(e.code));
     } catch (e) {
-      showError(e.toString());
+      showError('An unexpected error occurred. Please try again');
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
   void showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Text('❌ ', style: TextStyle(fontSize: 18)),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red.shade700,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Text('✅ ', style: TextStyle(fontSize: 18)),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.green.shade700,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void showMessage(String message) {
@@ -96,7 +174,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             buildTextField(context, passwordController, 'Password', () => setState(() {pashid=!pashid; print(pashid);}), obscure: pashid, pass: true),
             SizedBox(height: 20.h),
-            buildButton('Login', authenticate, null),
+            isLoading
+                ? Container(
+                    height: 50.h,
+                    width: 260.w,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20.r),
+                      color: const Color(0xff664bff),
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                      ),
+                    ),
+                  )
+                : buildButton('Login', authenticate, null),
             SizedBox(height: 10.h),
             TextButton(
               onPressed: () {
