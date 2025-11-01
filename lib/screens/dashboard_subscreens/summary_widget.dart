@@ -99,7 +99,7 @@ Widget summaryWidget(BuildContext context, VoidCallback rebuild) {
                                         fontSize: 18.sp,
                                         fontWeight: FontWeight.w500)),
                                 Text(
-                                    "${(sum["distanceKm"] as num).toStringAsFixed(2)}",
+                                    (sum["distanceKm"] as num).toStringAsFixed(2),
                                     style: TextStyle(
                                         fontSize: 18.sp,
                                         fontWeight: FontWeight.w500)),

@@ -138,7 +138,7 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
         ],
       ),
       child: DropdownButtonFormField<String>(
-        value: seltype,
+        initialValue: seltype,
         items: item.map((type) {
           return DropdownMenuItem<String>(
             value: type,

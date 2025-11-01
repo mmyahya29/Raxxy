@@ -5,7 +5,7 @@ class SOSScreen extends StatefulWidget {
   final Position position;
   final double lastSpeed;
 
-  const SOSScreen({Key? key, required this.position, required this.lastSpeed}) : super(key: key);
+  const SOSScreen({super.key, required this.position, required this.lastSpeed});
 
   @override
   State<SOSScreen> createState() => SOSScreenState();

@@ -433,7 +433,7 @@ class VehicleMonitorService {
           ScaffoldMessenger.of(_monitoringContext!).showSnackBar(
             SnackBar(
               content: Text(
-                '📊 Driving score updated (${_harshAccelEvents} harsh accel, ${_harshBrakeEvents} harsh brakes)',
+                '📊 Driving score updated ($_harshAccelEvents harsh accel, $_harshBrakeEvents harsh brakes)',
               ),
               backgroundColor: Colors.orange,
               duration: const Duration(seconds: 2),
