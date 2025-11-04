@@ -18,7 +18,7 @@ class VehicleMonitorService {
   final ValueNotifier<double> currentDistanceNotifier = ValueNotifier(0.0);
 
   static final VehicleMonitorService _instance =
-      VehicleMonitorService._internal();
+  VehicleMonitorService._internal();
 
   factory VehicleMonitorService() => _instance;
 
@@ -47,9 +47,9 @@ class VehicleMonitorService {
 
   // NEW filtering parameters to reduce false positives
   final double minSpeedThreshold =
-      0.0; // km/h - only detect harsh events above this speed
+  0.0; // km/h - only detect harsh events above this speed
   final int sustainedSampleCount =
-      1; // Need 5 consecutive samples above threshold
+  1; // Need 5 consecutive samples above threshold
   final double jitterThreshold = 2.0; // Max std deviation to filter noise
 
   String? _userId;
@@ -64,7 +64,7 @@ class VehicleMonitorService {
   DateTime? _lastCrashDetection;
   final Duration _crashCooldown = const Duration(seconds: 10);
 
-  // NEW tracking variables for sustained events
+  // tracking variables for sustained events
   int _consecutiveHarshAccel = 0;
   int _consecutiveHarshBrake = 0;
 
@@ -81,6 +81,27 @@ class VehicleMonitorService {
 
   // Store BuildContext for scaffold messages
   BuildContext? _monitoringContext;
+
+  // TURN DETECTION VARIABLES
+
+  // Store last accelerometer reading for angle calculation
+  double? _lastAccelX;
+  double? _lastAccelY;
+
+  // Turn detection threshold (in degrees)
+  final double turnAngleThreshold = 15.0;
+
+  // Turn detection cooldown to avoid spam
+  DateTime? _lastTurnDetection;
+  final Duration _turnCooldown = const Duration(seconds: 2);
+
+  // Minimum speed to detect turns
+  final double minSpeedForTurnDetection = 10.0;
+
+  // Turn counter for session summary
+  int _leftTurns = 0;
+  int _rightTurns = 0;
+
 
   Future<void> startMonitoring({
     required BuildContext context,
@@ -110,6 +131,13 @@ class VehicleMonitorService {
     _consecutiveHarshAccel = 0;
     _consecutiveHarshBrake = 0;
 
+    // Reset turn detection variables
+    _lastAccelX = null;
+    _lastAccelY = null;
+    _lastTurnDetection = null;
+    _leftTurns = 0;
+    _rightTurns = 0;
+
     ref.read(vehicleMonitorProvider.notifier).setVehicle(vehicleId);
     ref.read(vehicleMonitorProvider.notifier).setMake(make);
     ref.read(vehicleMonitorProvider.notifier).setModel(model);
@@ -137,9 +165,12 @@ class VehicleMonitorService {
           .updateDistance(totalDistanceMeters);
     });
 
-    // IMPROVED ACCELEROMETER LOGIC - More reliable harsh event detection
+    // IMPROVED ACCELEROMETER LOGIC - More reliable harsh event detection + TURN DETECTION
     _accelSub = userAccelerometerEvents.listen((event) {
       currentAcceleration = event;
+
+      // TURN DETECTION
+      _detectTurn(event.x, event.y);
 
       // Use Y-axis as primary direction indicator (forward/backward)
       // Positive = forward acceleration, Negative = braking/deceleration
@@ -274,8 +305,73 @@ class VehicleMonitorService {
       _lastPosition = position;
     });
 
-    print('Monitoring started');
+    print('Monitoring started with turn detection enabled');
   }
+
+  // Turn detection
+  void _detectTurn(double currentX, double currentY) {
+    // Only detect turns if vehicle is moving above threshold speed
+    if (currentSpeedKmh < minSpeedForTurnDetection) {
+      _lastAccelX = currentX;
+      _lastAccelY = currentY;
+      return;
+    }
+
+    // Check cooldown
+    if (_lastTurnDetection != null &&
+        DateTime.now().difference(_lastTurnDetection!) < _turnCooldown) {
+      return;
+    }
+
+    // Need previous reading to calculate angle
+    if (_lastAccelX == null || _lastAccelY == null) {
+      _lastAccelX = currentX;
+      _lastAccelY = currentY;
+      return;
+    }
+
+    // Calculate angle between last and current position vectors
+    // Using atan2 to get angle in radians, then convert to degrees
+    double lastAngle = atan2(_lastAccelY!, _lastAccelX!);
+    double currentAngle = atan2(currentY, currentX);
+
+    // Calculate the difference in angles
+    double angleDifference = currentAngle - lastAngle;
+
+    // Normalize angle difference to range [-π, π]
+    while (angleDifference > pi) angleDifference -= 2 * pi;
+    while (angleDifference < -pi) angleDifference += 2 * pi;
+
+    // Convert to degrees
+    double angleDifferenceInDegrees = angleDifference * (180 / pi);
+
+    // Check if angle exceeds threshold
+    if (angleDifferenceInDegrees.abs() > turnAngleThreshold) {
+      // Determine turn direction
+      String turnDirection;
+      if (angleDifferenceInDegrees > 0) {
+        turnDirection = "Left";
+        _leftTurns++;
+      } else {
+        turnDirection = "Right";
+        _rightTurns++;
+      }
+
+      // Log the turn detection
+      print(
+          "🔄 Turn Detected: $turnDirection turn "
+              "(${angleDifferenceInDegrees.abs().toStringAsFixed(1)}° at ${currentSpeedKmh.toStringAsFixed(0)} km/h)"
+      );
+
+      // Update cooldown
+      _lastTurnDetection = DateTime.now();
+    }
+
+    // Update last readings
+    _lastAccelX = currentX;
+    _lastAccelY = currentY;
+  }
+
 
   bool _shouldSendNotification(DateTime? lastNotification) {
     if (lastNotification == null) return true;
@@ -283,10 +379,10 @@ class VehicleMonitorService {
   }
 
   void _checkCrashFromAcceleration(
-    BuildContext context,
-    WidgetRef ref,
-    double avgAccel,
-  ) {
+      BuildContext context,
+      WidgetRef ref,
+      double avgAccel,
+      ) {
     // Check if enough time has passed since last crash detection
     if (_lastCrashDetection != null &&
         DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
@@ -298,7 +394,7 @@ class VehicleMonitorService {
 
     double accelFluctuation =
         _accelBuffer[_accelBuffer.length - 1] -
-        _accelBuffer[_accelBuffer.length - 2];
+            _accelBuffer[_accelBuffer.length - 2];
 
     // If high jitter/fluctuation detected
     if (accelFluctuation.abs() > 1) {
@@ -349,7 +445,6 @@ class VehicleMonitorService {
     });
   }
 
-  // UPDATED: Added manualMileage parameter and scaffold messages for each task
   Future<void> stopMonitoring(WidgetRef ref, {double? manualMileage}) async {
     _accelSub?.cancel();
     _positionSub?.cancel();
@@ -366,6 +461,12 @@ class VehicleMonitorService {
     }
 
     final summary = generateSessionSummary();
+
+    // Print turn statistics
+    print("📊 Session Turn Statistics:");
+    print("   Left Turns: $_leftTurns");
+    print("   Right Turns: $_rightTurns");
+    print("   Total Turns: ${_leftTurns + _rightTurns}");
 
     // Update mileage ONCE when stopping (instead of every GPS update)
     if (_userId != null && _vehicleId != null) {
@@ -489,6 +590,9 @@ class VehicleMonitorService {
       'avgSpeedKmh': avgSpeed,
       'harshAccelerations': _harshAccelEvents,
       'harshBrakes': _harshBrakeEvents,
+      'leftTurns': _leftTurns,  // Added turn data to summary
+      'rightTurns': _rightTurns,  // Added turn data to summary
+      'totalTurns': _leftTurns + _rightTurns,  // Added total turns
     };
   }
 
@@ -544,9 +648,9 @@ class VehicleMonitorService {
     // Get current goals
     final currentGoalsSnapshot = await goalsCollection.get();
     final currentGoals =
-        currentGoalsSnapshot.docs
-            .map((doc) => {...doc.data(), 'id': doc.id})
-            .toList();
+    currentGoalsSnapshot.docs
+        .map((doc) => {...doc.data(), 'id': doc.id})
+        .toList();
 
     final summary = generateSessionSummary();
     final int accHarshEvents = (summary["harshAccelerations"] ?? 0);
@@ -590,7 +694,7 @@ class VehicleMonitorService {
         "description": "Reduce harsh acceleration in your next trips.",
         "createdAt": FieldValue.serverTimestamp(),
         "target":
-            "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
+        "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
       };
 
       if (!goalExists(currentGoals, goal)) {
@@ -610,7 +714,7 @@ class VehicleMonitorService {
         "description": "Reduce harsh braking in your next trips.",
         "createdAt": FieldValue.serverTimestamp(),
         "target":
-            "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
+        "Drive with fewer than ${(durationMinutes * 0.2).toStringAsFixed(0)} harsh events",
       };
 
       if (!goalExists(currentGoals, goal)) {
@@ -625,12 +729,12 @@ class VehicleMonitorService {
   }
 
   bool goalExists(
-    List<Map<String, dynamic>> goals,
-    Map<String, dynamic> newGoal,
-  ) {
+      List<Map<String, dynamic>> goals,
+      Map<String, dynamic> newGoal,
+      ) {
     return goals.any(
-      (goal) =>
-          goal["title"] == newGoal["title"] &&
+          (goal) =>
+      goal["title"] == newGoal["title"] &&
           goal["vehicleId"] == newGoal["vehicleId"],
     );
   }
