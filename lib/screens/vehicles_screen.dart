@@ -6,7 +6,7 @@ import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import 'package:raxxy/widgets/reusable_widgets.dart';
 import '../providers/provider.dart';
 import '../providers/vehicle_provider.dart';
-import '../services/vehicle_monitor_service.dart';
+import '../services/monitoring_service/vehicle_monitor_service.dart';
 import 'vehicle_subscreens/add_vehicle.dart';
 import 'package:geolocator/geolocator.dart';
 
