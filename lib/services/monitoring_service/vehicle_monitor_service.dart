@@ -14,7 +14,6 @@ import '../../providers/provider.dart';
 import '../../providers/safety_feature_provider.dart';
 import '../notifications_services.dart';
 
-
 class VehicleMonitorService {
   final ValueNotifier<String?> monitoredVehicleIdNotifier = ValueNotifier(null);
   final ValueNotifier<double> currentSpeedNotifier = ValueNotifier(0.0);
@@ -34,6 +33,7 @@ class VehicleMonitorService {
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
   StreamSubscription<Position>? _positionSub;
   Timer? _uiUpdateTimer;
+  Timer? _speedZoneTimer; // NEW: For tracking speed zones every second
 
   UserAccelerometerEvent? currentAcceleration;
   double currentSpeedKmh = 0.0;
@@ -158,6 +158,9 @@ class VehicleMonitorService {
       }
       ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
       ref.read(vehicleMonitorProvider.notifier).updateDistance(totalDistanceMeters);
+
+      // Update session speed tracking
+      _sessionService.updateSpeed(currentSpeedKmh);
     });
 
     // ACCELEROMETER LOGIC
@@ -224,6 +227,9 @@ class VehicleMonitorService {
             _consecutiveHarshAccel++;
             _consecutiveHarshBrake = 0;
 
+            // Track state change for session service
+            _sessionService.updateAccelDecelState("accel");
+
             if (_consecutiveHarshAccel >= sustainedSampleCount) {
               if (_shouldSendNotification(_lastHarshAccelNotification)) {
                 _sessionService.incrementHarshAccel();
@@ -240,6 +246,9 @@ class VehicleMonitorService {
             // Negative = Braking
             _consecutiveHarshBrake++;
             _consecutiveHarshAccel = 0;
+
+            // Track state change for session service
+            _sessionService.updateAccelDecelState("decel");
 
             if (_consecutiveHarshBrake >= sustainedSampleCount) {
               if (_shouldSendNotification(_lastHarshBrakeNotification)) {
@@ -258,6 +267,9 @@ class VehicleMonitorService {
           // Reset counters if magnitude is below threshold
           _consecutiveHarshAccel = 0;
           _consecutiveHarshBrake = 0;
+
+          // Track neutral state
+          _sessionService.updateAccelDecelState("neutral");
         }
 
         // ====================================================================================
@@ -293,9 +305,6 @@ class VehicleMonitorService {
       final now = DateTime.now();
       currentSpeedKmh = position.speed * 3.6;
 
-      // Update session with speed
-      _sessionService.updateSpeed(currentSpeedKmh);
-
       // Store speed history for crash detection
       _speedHistory.add({'time': now, 'speed': currentSpeedKmh});
       if (_speedHistory.length > 10) _speedHistory.removeAt(0);
@@ -320,7 +329,7 @@ class VehicleMonitorService {
       _lastPosition = position;
     });
 
-    print('✅ Monitoring started with magnitude-based accel/decel detection');
+    print('✅ Monitoring started with enhanced analytics');
   }
 
   // ==================== DIRECTION REVERSAL DETECTION ====================
@@ -504,6 +513,7 @@ class VehicleMonitorService {
     _accelSub?.cancel();
     _positionSub?.cancel();
     _uiUpdateTimer?.cancel();
+    _speedZoneTimer?.cancel();
 
     _lastPosition = null;
     _isMonitoring = false;
@@ -559,10 +569,11 @@ class VehicleMonitorService {
         );
 
         if (_monitoringContext != null && _monitoringContext!.mounted) {
+          final summary = _sessionService.generateSummary(totalDistanceMeters / 1000);
           ScaffoldMessenger.of(_monitoringContext!).showSnackBar(
             SnackBar(
               content: Text(
-                '💾 Trip summary saved (${_sessionService.generateSummary(totalDistanceMeters / 1000)['duration']} min, ${(totalDistanceMeters / 1000).toStringAsFixed(1)} km)',
+                '💾 Trip summary saved (${summary['durationMinutes']} min, ${(totalDistanceMeters / 1000).toStringAsFixed(1)} km)',
               ),
               backgroundColor: Colors.blue,
               duration: const Duration(seconds: 2),
@@ -578,7 +589,7 @@ class VehicleMonitorService {
           userId: _userId!,
           harshAccelEvents: _sessionService.harshAccelEvents,
           harshBrakeEvents: _sessionService.harshBrakeEvents,
-          sessionDurationMinutes: summary['duration'],
+          sessionDurationMinutes: summary['durationMinutes'],
         );
 
         if (_monitoringContext != null && _monitoringContext!.mounted) {
@@ -601,7 +612,7 @@ class VehicleMonitorService {
           vehicleId: _vehicleId!,
           harshAccelEvents: _sessionService.harshAccelEvents,
           harshBrakeEvents: _sessionService.harshBrakeEvents,
-          sessionDurationMinutes: summary['duration'],
+          sessionDurationMinutes: summary['durationMinutes'],
         );
 
         if (_monitoringContext != null && _monitoringContext!.mounted) {
