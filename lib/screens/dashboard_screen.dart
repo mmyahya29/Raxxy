@@ -8,6 +8,7 @@ import 'package:raxxy/screens/dashboard_subscreens/goals_widget.dart';
 import '../providers/goals_provider.dart';
 import '../providers/provider.dart';
 import '../services/maintenance_service.dart';
+import 'dashboard_subscreens/driver_profile_widget.dart';
 import 'maintenance_subscreens/maintenance_widget.dart';
 import 'dashboard_subscreens/monitor_widget.dart';
 import 'dashboard_subscreens/summary_widget.dart';
@@ -74,6 +75,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               SizedBox(height: 5.h),
               monitorWidget(context,widget),
+              SizedBox(height: 10.h,),
+              Text(
+                'Driver Profile',
+                style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w800),
+              ),
+              SizedBox(height: 5.h,),
+              driverProfileWidget(context),
               SizedBox(height: 10.h,),
               Text(
                 'Active Goals',
