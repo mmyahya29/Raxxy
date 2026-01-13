@@ -16,14 +16,14 @@ class DriverProfileService {
           .doc(userId)
           .collection('sessions')
           .orderBy('endTime', descending: true)
-          .limit(sessionCount) // session limit iz 10
+          .limit(sessionCount)
           .get();
 
       if (sessionsSnapshot.docs.isEmpty) {
-        return getDefaultProfile(); //default base profile, nichy function bna va
+        return getDefaultProfile();
       }
 
-      final sessions = sessionsSnapshot.docs.map((doc) => doc.data()).toList(); //converting snapshot to list, use krny k liye
+      final sessions = sessionsSnapshot.docs.map((doc) => doc.data()).toList();
 
       // Calculating metrics from sessions
       final metrics = _calculateMetrics(sessions);
@@ -34,11 +34,14 @@ class DriverProfileService {
       // Determine secondary traits
       final secondaryTraits = _determineSecondaryTraits(metrics, sessions);
 
+      // NEW: Identify Stress Triggers
+      final stressTriggers = _identifyStressTriggers(sessions, metrics);
+
       // Calculate profile scores
       final scores = _calculateProfileScores(metrics);
 
       // Generate recommendations
-      final recommendations = _generateRecommendations(primaryProfile, metrics);
+      final recommendations = _generateRecommendations(primaryProfile, metrics, stressTriggers);
 
       // Calculate badge tier
       final badge = _calculateBadgeTier(metrics);
@@ -46,6 +49,7 @@ class DriverProfileService {
       return {
         'primaryProfile': primaryProfile,
         'secondaryTraits': secondaryTraits,
+        'stressTriggers': stressTriggers, // Saved to profile
         'metrics': metrics,
         'scores': scores,
         'recommendations': recommendations,
@@ -59,11 +63,104 @@ class DriverProfileService {
     }
   }
 
+  /// NEW: Logic to identify specific stress triggers
+  static List<String> _identifyStressTriggers(
+      List<Map<String, dynamic>> sessions, Map<String, double> overallMetrics) {
+    final triggers = <String>[];
+    final overallHarshRate = overallMetrics['avgHarshEventsPerMin'] ?? 0.0;
+
+    // Avoid noise for perfect drivers or very low sample size
+    if (overallHarshRate < 0.05) return triggers;
+
+    // 1. Time-of-Day Analysis
+    // Buckets: 0=Night(22-6), 1=Morning(6-10), 2=Midday(10-16), 3=Evening(16-22)
+    final timeBuckets = List.generate(4, (_) => {'count': 0, 'harsh': 0.0});
+
+    for (var session in sessions) {
+      // Handle timestamp properly
+      final endTimestamp = session['endTime'] as Timestamp?;
+      if (endTimestamp == null) continue;
+
+      final date = endTimestamp.toDate();
+      final hour = date.hour;
+      final harsh = ((session['harshAccelerations'] ?? 0) + (session['harshBrakes'] ?? 0)).toDouble();
+      final duration = (session['durationMinutes'] ?? 1).toDouble();
+      final harshRate = duration > 0 ? harsh / duration : 0;
+
+      int bucketIndex;
+      if (hour >= 6 && hour < 10) bucketIndex = 1; // Morning Rush
+      else if (hour >= 10 && hour < 16) bucketIndex = 2; // Midday
+      else if (hour >= 16 && hour < 22) bucketIndex = 3; // Evening Rush
+      else bucketIndex = 0; // Night
+
+      timeBuckets[bucketIndex]['count'] = (timeBuckets[bucketIndex]['count'] as int) + 1;
+      timeBuckets[bucketIndex]['harsh'] = (timeBuckets[bucketIndex]['harsh'] as double) + harshRate;
+    }
+
+    // Average out the buckets
+    for (int i = 0; i < timeBuckets.length; i++) {
+      int count = timeBuckets[i]['count'] as int;
+      if (count > 0) {
+        timeBuckets[i]['harsh'] = (timeBuckets[i]['harsh'] as double) / count;
+      }
+    }
+
+    // Define Thresholds (30% higher than average)
+    if ((timeBuckets[1]['harsh'] as double) > overallHarshRate * 1.3) triggers.add('Morning Rush (6-10 AM)');
+    if ((timeBuckets[3]['harsh'] as double) > overallHarshRate * 1.3) triggers.add('Evening Traffic (4-10 PM)');
+    if ((timeBuckets[0]['harsh'] as double) > overallHarshRate * 1.5) triggers.add('Late Night Driving');
+
+    // 2. Traffic Density Inference
+    // We infer "Heavy Traffic" if avgSpeed is low (< 35km/h) BUT stop-and-go (switches > 4/min) is high
+    double heavyTrafficHarshRate = 0;
+    int heavyTrafficCount = 0;
+
+    for (var session in sessions) {
+      final avgSpeed = (session['avgSpeedKmh'] ?? 0).toDouble();
+      final switches = (session['totalSwitches'] ?? 0).toDouble();
+      final duration = (session['durationMinutes'] ?? 1).toDouble();
+      final switchesPerMin = duration > 0 ? switches / duration : 0;
+
+      final harsh = ((session['harshAccelerations'] ?? 0) + (session['harshBrakes'] ?? 0)).toDouble();
+      final harshRate = duration > 0 ? harsh / duration : 0;
+
+      if (avgSpeed < 35 && switchesPerMin > 4.0) {
+        heavyTrafficHarshRate += harshRate;
+        heavyTrafficCount++;
+      }
+    }
+
+    if (heavyTrafficCount > 0) {
+      final avgHeavyTrafficHarsh = heavyTrafficHarshRate / heavyTrafficCount;
+      if (avgHeavyTrafficHarsh > overallHarshRate * 1.25) {
+        triggers.add('Heavy Traffic');
+      }
+    }
+
+    // 3. Long Duration Fatigue
+    double longDriveHarshRate = 0;
+    int longDriveCount = 0;
+
+    for (var session in sessions) {
+      final duration = (session['durationMinutes'] ?? 0).toDouble();
+      if (duration > 45) {
+        final harsh = ((session['harshAccelerations'] ?? 0) + (session['harshBrakes'] ?? 0)).toDouble();
+        longDriveHarshRate += harsh / duration;
+        longDriveCount++;
+      }
+    }
+
+    if (longDriveCount > 0 && (longDriveHarshRate / longDriveCount) > overallHarshRate * 1.3) {
+      triggers.add('Long Drives (>45m)');
+    }
+
+    return triggers;
+  }
+
   /// Calculate profiling metrics from sessions
   static Map<String, double> _calculateMetrics(List<Map<String, dynamic>> sessions) {
     if (sessions.isEmpty) return {};
 
-    // Initialize sums
     double totalHighwayProb = 0;
     double totalCityProb = 0;
     double totalHarshEvents = 0;
@@ -74,13 +171,12 @@ class DriverProfileService {
     double totalDistance = 0;
     double totalTurns = 0;
 
-    List<double> drivingScores = [];
     List<double> harshEventRates = [];
     List<double> avgSpeeds = [];
 
     for (var session in sessions) {
       final duration = (session['durationMinutes'] ?? 0).toDouble();
-      if (duration == 0) continue; //remember 'continue'?
+      if (duration == 0) continue;
 
       totalHighwayProb += (session['highwayProbability'] ?? 0.0);
       totalCityProb += (session['cityProbability'] ?? 0.0);
@@ -98,7 +194,6 @@ class DriverProfileService {
 
     final count = sessions.length.toDouble();
 
-    // Calculate averages
     final avgHighwayProb = totalHighwayProb / count;
     final avgCityProb = totalCityProb / count;
     final double avgHarshEventsPerMin = totalDuration > 0 ? totalHarshEvents / totalDuration : 0;
@@ -107,7 +202,6 @@ class DriverProfileService {
     final double avgSwitchesPerMin = totalDuration > 0 ? totalSwitches / totalDuration : 0;
     final double avgTurnsPerMin = totalDuration > 0 ? totalTurns / totalDuration : 0;
 
-    // Calculate variance/consistency
     final speedVariance = _calculateVariance(avgSpeeds);
     final harshEventVariance = _calculateVariance(harshEventRates);
 
@@ -127,14 +221,12 @@ class DriverProfileService {
     };
   }
 
-  /// Determine primary driving profile
   static String _determinePrimaryProfile(Map<String, double> metrics) {
     final highwayProb = metrics['avgHighwayProbability'] ?? 0.0;
     final cityProb = metrics['avgCityProbability'] ?? 0.0;
     final harshEvents = metrics['avgHarshEventsPerMin'] ?? 0.0;
     final avgSpeed = metrics['avgSpeed'] ?? 0.0;
 
-    // Decision tree for primary profile
     if (harshEvents > 0.5) {
       return avgSpeed > 60 ? 'Aggressive Driver' : 'Struggling Driver';
     }
@@ -152,71 +244,44 @@ class DriverProfileService {
     }
 
     if (cityProb > 0.65 && highwayProb < 0.35) {
-      return harshEvents < 0.3 ? 'City Expert' : 'City Struggler';
+      return harshEvents < 0.3 ? 'City Expert' : 'Urban Rusher';
     }
 
-    if ((highwayProb - cityProb).abs() < 0.2) {
-      return harshEvents < 0.25 ? 'Balanced Driver' : 'Inconsistent Driver';
-    }
-
-    return 'Developing Driver';
+    return 'Balanced Driver';
   }
 
-  /// Determine secondary traits
   static List<String> _determineSecondaryTraits(
-      Map<String, double> metrics,
-      List<Map<String, dynamic>> sessions,
-      ) {
-    final traits = <String>[];
-
-    final avgSpeed = metrics['avgSpeed'] ?? 0.0;
+      Map<String, double> metrics, List<Map<String, dynamic>> sessions) {
+    List<String> traits = [];
     final harshEvents = metrics['avgHarshEventsPerMin'] ?? 0.0;
     final switchesPerMin = metrics['avgSwitchesPerMin'] ?? 0.0;
+    final avgSpeed = metrics['avgSpeed'] ?? 0.0;
     final consistency = metrics['consistencyScore'] ?? 0.0;
 
-    // Speed Demon
-    if (avgSpeed > 70) {
-      traits.add('Speed Demon');
+    bool isNightOwl = false;
+    int nightSessions = 0;
+    for (var session in sessions) {
+      final endTime = (session['endTime'] as Timestamp?)?.toDate();
+      if (endTime != null && (endTime.hour < 6 || endTime.hour > 22)) {
+        nightSessions++;
+      }
+    }
+    if (nightSessions > sessions.length * 0.4) {
+      traits.add('Night Owl');
     }
 
-    // Calm Driver
-    if (harshEvents < 0.1 && switchesPerMin < 2) {
-      traits.add('Calm Driver');
-    }
+    if (harshEvents < 0.1 && switchesPerMin < 2) traits.add('Calm Driver');
+    if (switchesPerMin > 6 && harshEvents < 0.3) traits.add('Traffic Warrior');
+    if (switchesPerMin < 3 && harshEvents < 0.2) traits.add('Smooooth Operatoorrr 🌶️');
+    if (consistency > 0.75) traits.add('Consistent');
+    else if (consistency < 0.4) traits.add('Inconsistent');
 
-    // Traffic Warrior
-    if (switchesPerMin > 6 && harshEvents < 0.3) {
-      traits.add('Traffic Warrior');
-    }
-
-    // Smooth Operator, especially for u, 😏
-    if (switchesPerMin < 3 && harshEvents < 0.2) {
-      traits.add('Smooooth Operatoorrr 🌶️');
-    }
-
-    // Consistent Performance
-    if (consistency > 0.75) {
-      traits.add('Consistent');
-    } else if (consistency < 0.4) {
-      traits.add('Inconsistent');
-    }
-
-    // Check for improvement trend (compare first half vs second half)
     final trend = _calculateTrend(sessions);
-    if (trend > 0.15) {
-      traits.add('Improving Fast');
-    } else if (trend > 0.05) {
-      traits.add('Improving');
-    } else if (trend < -0.15) {
-      traits.add('Needs Focus');
-    }
+    if (trend > 0.15) traits.add('Improving Fast');
+    else if (trend > 0.05) traits.add('Improving');
+    else if (trend < -0.15) traits.add('Needs Focus');
 
-    // Economic Driver
-    if (harshEvents < 0.2 && avgSpeed > 40 && avgSpeed < 70) {
-      traits.add('Fuel Efficient');
-    }
-
-    // Rush Hour Expert
+    if (harshEvents < 0.2 && avgSpeed > 40 && avgSpeed < 70) traits.add('Fuel Efficient');
     if (metrics['avgCityProbability']! > 0.6 && switchesPerMin > 5 && harshEvents < 0.35) {
       traits.add('Rush Hour Expert');
     }
@@ -224,27 +289,25 @@ class DriverProfileService {
     return traits;
   }
 
-  /// Calculate profile scores (0-100)
   static Map<String, int> _calculateProfileScores(Map<String, double> metrics) {
     final harshEvents = metrics['avgHarshEventsPerMin'] ?? 0.0;
     final avgSpeed = metrics['avgSpeed'] ?? 0.0;
     final consistency = metrics['consistencyScore'] ?? 0.0;
 
-    // Smoothness Score (0-100)
-    final smoothness = ((1 - (harshEvents / 1.0).clamp(0.0, 1.0)) * 100).toInt();
+    int smoothness = ((1.0 - (harshEvents * 1.5).clamp(0.0, 1.0)) * 100).round();
 
-    // Safety Score (0-100)
-    final safety = ((1 - (harshEvents / 0.8).clamp(0.0, 1.0)) * 100).toInt();
+    double safetyFactor = 1.0;
+    if (avgSpeed > 110) safetyFactor -= 0.3;
+    if (harshEvents > 0.5) safetyFactor -= 0.4;
+    int safety = (safetyFactor * 100).clamp(0, 100).round();
 
-    // Efficiency Score (0-100) - Optimal speed 50-70 km/h
-    final speedOptimal = (avgSpeed - 60).abs();
-    final efficiency = ((1 - (speedOptimal / 40).clamp(0.0, 1.0)) * 100).toInt();
+    double efficiencyFactor = 0.5;
+    if (avgSpeed > 40 && avgSpeed < 90) efficiencyFactor += 0.3;
+    if (harshEvents < 0.2) efficiencyFactor += 0.2;
+    int efficiency = (efficiencyFactor * 100).clamp(0, 100).round();
 
-    // Consistency Score (0-100)
-    final consistencyScore = (consistency * 100).toInt();
-
-    // Overall Score (weighted average)
-    final overall = ((smoothness * 0.3 + safety * 0.3 + efficiency * 0.2 + consistencyScore * 0.2)).toInt();
+    int consistencyScore = (consistency * 100).round();
+    int overall = ((smoothness + safety + efficiency + consistencyScore) / 4).round();
 
     return {
       'smoothness': smoothness,
@@ -255,72 +318,59 @@ class DriverProfileService {
     };
   }
 
-  /// Generate personalized recommendations
-  static List<String> _generateRecommendations(String profile, Map<String, double> metrics) {
+  static List<String> _generateRecommendations(
+      String profile, Map<String, double> metrics, [List<String>? triggers]) {
     final recommendations = <String>[];
     final harshEvents = metrics['avgHarshEventsPerMin'] ?? 0.0;
     final avgSpeed = metrics['avgSpeed'] ?? 0.0;
     final switchesPerMin = metrics['avgSwitchesPerMin'] ?? 0.0;
 
+    // Trigger-based recommendations (Real-time relevance)
+    if (triggers != null && triggers.isNotEmpty) {
+      for (var trigger in triggers) {
+        if (trigger.contains('Morning Rush')) {
+          recommendations.add('🌅 Try leaving 10 minutes earlier to avoid Morning Rush stress');
+        } else if (trigger.contains('Evening Traffic')) {
+          recommendations.add('🏙️ Patience is key in Evening Traffic. Deep breaths!');
+        } else if (trigger.contains('Heavy Traffic')) {
+          recommendations.add('🚗 In Heavy Traffic, increase following distance to avoid sudden stops');
+        } else if (trigger.contains('Late Night')) {
+          recommendations.add('🌙 Night visibility is lower. Reduce speed slightly.');
+        } else if (trigger.contains('Long Drives')) {
+          recommendations.add('⏱️ Take a break every 2 hours on long drives to stay fresh.');
+        }
+      }
+    }
+
     switch (profile) {
       case 'Aggressive Driver':
         recommendations.add('🚦 Maintain safe following distance to reduce harsh braking');
         recommendations.add('🧘 Practice smooth acceleration - anticipate traffic flow');
-        recommendations.add('⏱️ Leave earlier to reduce time pressure');
         break;
-
       case 'Cautious Driver':
         recommendations.add('🚗 Consider gradually increasing highway driving for experience');
-        recommendations.add('📈 You\'re safe! Try maintaining traffic flow speed when conditions allow');
         break;
-
       case 'City Expert':
-        recommendations.add('🛣️ Great city skills! Practice highway merging for versatility');
         recommendations.add('✅ Your smooth city driving is exemplary');
         break;
-
       case 'Highway Cruiser':
-        recommendations.add('🏙️ Excellent highway skills! Practice urban navigation occasionally');
         recommendations.add('✅ Your long-distance driving is efficient');
         break;
-
       case 'Struggling Driver':
         recommendations.add('🎓 Consider defensive driving course');
-        recommendations.add('🚦 Focus on maintaining steady speed and gentle inputs');
-        recommendations.add('📍 Practice in low-traffic areas first');
+        recommendations.add('🚦 Focus on maintaining steady speed');
         break;
-
-      case 'Balanced Driver':
-        recommendations.add('✅ Excellent versatility! Keep maintaining your balanced approach');
-        recommendations.add('📊 Minor improvements can boost your efficiency further');
-        break;
-
-      case 'Precision Driver':
-        recommendations.add('🏆 Outstanding! You\'re a role model driver');
-        recommendations.add('💡 Consider sharing tips with other drivers');
-        break;
-
       default:
-        recommendations.add('📊 Keep driving to build your profile');
+        recommendations.add('🚗 Keep driving to build your profile');
     }
 
-    // Additional recommendations based on metrics
-    if (harshEvents > 0.4) {
-      recommendations.add('⚠️ Reduce harsh events by 30% to improve fuel efficiency');
-    }
-
-    if (switchesPerMin > 7) {
-      recommendations.add('🔄 High acceleration changes detected - try smoother transitions');
-    }
-
-    if (avgSpeed < 30) {
-      recommendations.add('🐌 Consider route planning to avoid heavy congestion');
-    }
+    if (harshEvents > 0.4) recommendations.add('⚠️ Reduce harsh events by 30% to improve fuel efficiency');
+    if (switchesPerMin > 7) recommendations.add('🔄 Try smoother transitions between acceleration and braking');
+    if (avgSpeed < 30) recommendations.add('🐌 Consider route planning to avoid heavy congestion');
 
     return recommendations;
   }
 
-  /// Calculate badge tier based on overall performance
   static Map<String, dynamic> _calculateBadgeTier(Map<String, double> metrics) {
     final harshEvents = metrics['avgHarshEventsPerMin'] ?? 0.0;
     final consistency = metrics['consistencyScore'] ?? 0.0;
@@ -331,55 +381,35 @@ class DriverProfileService {
     String description;
 
     if (harshEvents < 0.15 && consistency > 0.75 && distance > 100) {
-      tier = 'Diamond';
-      emoji = '💎';
-      description = 'Elite Driver - Exceptional Skill';
+      tier = 'Diamond'; emoji = '💎'; description = 'Elite Driver - Exceptional Skill';
     } else if (harshEvents < 0.25 && consistency > 0.65 && distance > 50) {
-      tier = 'Platinum';
-      emoji = '🏆';
-      description = 'Expert Driver - Highly Skilled';
+      tier = 'Platinum'; emoji = '🏆'; description = 'Expert Driver - Highly Skilled';
     } else if (harshEvents < 0.35 && consistency > 0.55) {
-      tier = 'Gold';
-      emoji = '🥇';
-      description = 'Skilled Driver - Above Average';
+      tier = 'Gold'; emoji = '🥇'; description = 'Skilled Driver - Above Average';
     } else if (harshEvents < 0.5 && consistency > 0.45) {
-      tier = 'Silver';
-      emoji = '🥈';
-      description = 'Competent Driver - Improving';
+      tier = 'Silver'; emoji = '🥈'; description = 'Competent Driver - Improving';
     } else {
-      tier = 'Bronze';
-      emoji = '🥉';
-      description = 'Developing Driver - Keep Practicing';
+      tier = 'Bronze'; emoji = '🥉'; description = 'Developing Driver - Keep Practicing';
     }
 
-    return {
-      'tier': tier,
-      'emoji': emoji,
-      'description': description,
-    };
+    return {'tier': tier, 'emoji': emoji, 'description': description};
   }
 
-  /// Calculate variance of a list
-  static double _calculateVariance(List<double> values) {
-    if (values.isEmpty) return 0;
-
-    final mean = values.reduce((a, b) => a + b) / values.length;
-    final variance = values.map((v) => pow(v - mean, 2)).reduce((a, b) => a + b) / values.length;
-    return sqrt(variance);
+  static double _calculateVariance(List<double> numbers) {
+    if (numbers.isEmpty) return 0;
+    final mean = numbers.reduce((a, b) => a + b) / numbers.length;
+    final variance = numbers.map((n) => pow(n - mean, 2)).reduce((a, b) => a + b) / numbers.length;
+    return variance;
   }
 
-  /// Calculate consistency score (0-1, higher is more consistent)
-  static double _calculateConsistency(double speedVariance, double harshEventVariance) {
-    // Lower variance, mtlb change kam, means higher consistency...
-    final speedConsistency = 1 - (speedVariance / 50).clamp(0.0, 1.0);
-    final harshConsistency = 1 - (harshEventVariance / 2).clamp(0.0, 1.0);
+  static double _calculateConsistency(double speedVar, double harshVar) {
+    final speedConsistency = (1.0 - (speedVar / 400).clamp(0.0, 1.0));
+    final harshConsistency = (1.0 - (harshVar / 0.5).clamp(0.0, 1.0));
     return (speedConsistency + harshConsistency) / 2;
   }
 
-  /// Calculate improvement trend
   static double _calculateTrend(List<Map<String, dynamic>> sessions) {
     if (sessions.length < 4) return 0;
-
     final half = sessions.length ~/ 2;
     final recentSessions = sessions.sublist(0, half);
     final olderSessions = sessions.sublist(half);
@@ -392,15 +422,14 @@ class DriverProfileService {
         .map((s) => (s['harshEventsPerMinute'] ?? 0.0) as double)
         .reduce((a, b) => a + b) / olderSessions.length;
 
-    // Negative trend = improving (fewer harsh events)
     return olderAvg - recentAvg;
   }
 
-  /// Default profile for new users
   static Map<String, dynamic> getDefaultProfile() {
     return {
       'primaryProfile': 'New Driver',
       'secondaryTraits': ['Getting Started'],
+      'stressTriggers': [], // Empty for new users
       'metrics': {},
       'scores': {
         'smoothness': 50,
@@ -423,7 +452,6 @@ class DriverProfileService {
     };
   }
 
-  /// Save profile to Firestore
   static Future<void> saveProfile({
     required String userId,
     required Map<String, dynamic> profile,
@@ -442,7 +470,6 @@ class DriverProfileService {
     }
   }
 
-  /// Get cached profile from Firestore
   static Future<Map<String, dynamic>?> getCachedProfile(String userId) async {
     try {
       final firestore = FirebaseFirestore.instance;

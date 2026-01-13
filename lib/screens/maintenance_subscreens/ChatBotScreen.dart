@@ -34,8 +34,9 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
   // 3. API Configuration
   // TODO: Replace with your actual Hugging Face Access Token
-  final String _apiKey = "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";
-  final String _apiUrl = "https://router.huggingface.co/hf-inference/models/google/flan-t5-base";
+  final String _apiKey = "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";
+  final String _apiUrl = "https://api.groq.com/openai/v1/chat/completions";
+  final String _model = "llama-3.1-8b-instant"; // Fast and very smart
 
   @override
   void initState() {
@@ -146,14 +147,19 @@ Provide a helpful, short automotive maintenance tip or answer related to the que
         "Content-Type": "application/json",
       },
       body: jsonEncode({
-        "inputs": prompt,
-        "parameters": {
-          "max_new_tokens": 250, // Use max_new_tokens for the newer router
-          "temperature": 0.7,
-        },
-        "options": {
-          "wait_for_model": true // Ensures the API wakes up the model if it's "asleep"
-        }
+        "model": _model,
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a helpful automotive troubleshooting assistant."
+          },
+          {
+            "role": "user",
+            "content": prompt
+          }
+        ],
+        "temperature": 0.7,
+        "max_tokens": 500,
       }),
     );
 

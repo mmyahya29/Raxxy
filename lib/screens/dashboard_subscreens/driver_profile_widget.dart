@@ -25,9 +25,15 @@ Widget driverProfileWidget(BuildContext context) {
         return profileAsync.when(
           data: (profile) {
             final badge = profile['badge'] as Map<String, dynamic>;
-            final scores = profile['scores'] as Map<String, int>;
-            final traits = profile['secondaryTraits'] as List<dynamic>;
-            final recommendations = profile['recommendations'] as List<dynamic>;
+
+            // FIX: Use Map.from to safely convert dynamic map to int map
+            final scores = Map<String, int>.from(profile['scores'] ?? {});
+
+            final traits = List<String>.from(profile['secondaryTraits'] ?? []);
+            final recommendations = List<String>.from(profile['recommendations'] ?? []);
+
+            // NEW: Display Stress Triggers
+            final stressTriggers = List<String>.from(profile['stressTriggers'] ?? []);
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,6 +67,26 @@ Widget driverProfileWidget(BuildContext context) {
                 ),
                 SizedBox(height: 10.h),
 
+                // Stress Triggers (New Section)
+                if (stressTriggers.isNotEmpty) ...[
+                  Text(
+                    '⚠️ Stress Triggers:',
+                    style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w700, color: Colors.redAccent),
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    children: stressTriggers
+                        .map(
+                          (trigger) => Chip(
+                        label: Text(trigger, style: const TextStyle(color: Colors.white)),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    )
+                        .toList(),
+                  ),
+                  SizedBox(height: 10.h),
+                ],
+
                 // Secondary traits
                 if (traits.isNotEmpty) ...[
                   Text(
@@ -87,10 +113,10 @@ Widget driverProfileWidget(BuildContext context) {
                   style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w700),
                 ),
                 SizedBox(height: 5.h),
-                _buildScoreBar('Overall', scores['overall']!, Colors.purple),
-                _buildScoreBar('Smoothness', scores['smoothness']!, Colors.green),
-                _buildScoreBar('Safety', scores['safety']!, Colors.blue),
-                _buildScoreBar('Efficiency', scores['efficiency']!, Colors.orange),
+                _buildScoreBar('Overall', scores['overall'] ?? 0, Colors.purple),
+                _buildScoreBar('Smoothness', scores['smoothness'] ?? 0, Colors.green),
+                _buildScoreBar('Safety', scores['safety'] ?? 0, Colors.blue),
+                _buildScoreBar('Efficiency', scores['efficiency'] ?? 0, Colors.orange),
 
                 SizedBox(height: 10.h),
 
@@ -123,7 +149,7 @@ Widget driverProfileWidget(BuildContext context) {
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error loading profile: $e')),
+          error: (err, stack) => Center(child: Text('Error: $err')),
         );
       },
     ),
@@ -140,15 +166,18 @@ Widget _buildScoreBar(String label, int score, Color color) {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label, style: TextStyle(fontSize: 14.sp)),
-            Text('$score/100', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+            Text('$score/100', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold)),
           ],
         ),
         SizedBox(height: 4.h),
-        LinearProgressIndicator(
-          value: score / 100,
-          backgroundColor: Colors.grey.shade300,
-          valueColor: AlwaysStoppedAnimation(color),
-          minHeight: 8.h,
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4.r),
+          child: LinearProgressIndicator(
+            value: score / 100,
+            backgroundColor: Colors.grey[300],
+            color: color,
+            minHeight: 8.h,
+          ),
         ),
       ],
     ),

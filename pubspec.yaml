@@ -64,7 +64,7 @@ dependencies:
   permission_handler: ^12.0.1
   persistent_bottom_nav_bar: ^6.2.1
   fl_chart: ^0.68.0
-#  workmanager: ^0.7.0
+
   audioplayers: ^6.5.1
   vibration: ^3.1.4
   wakelock_plus: ^1.4.0

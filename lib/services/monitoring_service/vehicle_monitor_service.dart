@@ -6,6 +6,7 @@ import 'package:raxxy/services/crash_detector.dart';
 import 'package:raxxy/services/monitoring_service/session_summary_service.dart';
 import 'package:raxxy/services/monitoring_service/driving_score_service.dart';
 import 'package:raxxy/services/monitoring_service/goal_generation_service.dart';
+import 'package:raxxy/services/driver_profile_service.dart'; // Import DriverProfileService
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -21,7 +22,7 @@ class VehicleMonitorService {
   final ValueNotifier<double> currentDistanceNotifier = ValueNotifier(0.0);
 
   static final VehicleMonitorService _instance =
-      VehicleMonitorService._internal();
+  VehicleMonitorService._internal();
 
   factory VehicleMonitorService() => _instance;
 
@@ -33,7 +34,7 @@ class VehicleMonitorService {
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
   StreamSubscription<Position>? _positionSub;
   Timer? _uiUpdateTimer;
-  Timer? _speedZoneTimer; // NEW: For tracking speed zones every second
+  Timer? _speedZoneTimer; // For tracking speed zones every second
 
   UserAccelerometerEvent? currentAcceleration;
   double currentSpeedKmh = 0.0;
@@ -75,13 +76,15 @@ class VehicleMonitorService {
   // Store BuildContext for scaffold messages
   BuildContext? _monitoringContext;
 
+  // ==================== TRIGGER TRACKING ====================
+  bool _hasWarnedAboutTimeTrigger = false;
+  List<String> _activeTriggers = [];
+  int _lowSpeedCounter = 0; // To track duration of low speed for traffic inference
+
   // ==================== TURN DETECTION VARIABLES ====================
 
   // Low-pass filter for smoothing lateral force
   double _smoothedLateralForce = 0.0; // The smoothed X-axis value
-  // Smoothing factor (0.0-1.0)
-  // Lower = smoother but slower
-  // Higher = faster but noisier
   final double _lpfAlpha = 0.15;
 
   // Turn detection thresholds
@@ -127,6 +130,11 @@ class VehicleMonitorService {
     _turnStartTime = null;
     _lastTurnDetection = null;
 
+    // Reset trigger tracking
+    _hasWarnedAboutTimeTrigger = false;
+    _activeTriggers = [];
+    _lowSpeedCounter = 0;
+
     if (_isMonitoring) return;
     _isMonitoring = true;
     _userId = userId;
@@ -158,6 +166,9 @@ class VehicleMonitorService {
 
     sendNotification("RAXXY", "Monitoring service started");
 
+    // Check for stress triggers immediately at start
+    _checkStressTriggers(userId);
+
     try {
       await WakelockPlus.enable();
       print('Wakelock enabled - screen will stay on while monitoring');
@@ -179,6 +190,23 @@ class VehicleMonitorService {
 
       // Update session speed tracking
       _sessionService.updateSpeed(currentSpeedKmh);
+
+      // Dynamic Traffic Monitor check
+      if (_activeTriggers.contains('Heavy Traffic')) {
+        if (currentSpeedKmh < 30 && currentSpeedKmh > 0) {
+          _lowSpeedCounter++;
+          // If in low speed for ~5 minutes (600 * 0.5s = 300s)
+          if (_lowSpeedCounter > 600) {
+            _triggerPreventativeAlert(
+                "Traffic Detected",
+                "We know heavy traffic stresses you out. Stay cool!"
+            );
+            _lowSpeedCounter = -600; // Reset with delay to avoid spam
+          }
+        } else {
+          _lowSpeedCounter = 0;
+        }
+      }
     });
 
     // ACCELEROMETER LOGIC
@@ -315,24 +343,13 @@ class VehicleMonitorService {
       }
     }
 
-    // ==================== GYROSCOPE LISTENER (Optional but recommended) ====================
-    // The gyroscope measures rotation directly, giving us confirmation
-    // that the vehicle is actually turning (not just experiencing lateral force)
-
+    // ==================== GYROSCOPE LISTENER ====================
     if (_useGyroscopeFusion) {
       _gyroSub = gyroscopeEvents.listen((GyroscopeEvent event) {
         // Smooth the Z-axis rotation (yaw - turning left/right)
         _smoothedGyroZ =
             (_lpfAlpha * event.z) + ((1 - _lpfAlpha) * _smoothedGyroZ);
-
-        // Optional: Log high rotation rates for debugging
-        if (_smoothedGyroZ.abs() > 1.0) {
-          print(
-            "🔄 Gyroscope:  ${_smoothedGyroZ.toStringAsFixed(3)} rad/s rotation",
-          );
-        }
       });
-
       print('✅ Gyroscope fusion enabled for turn detection');
     }
 
@@ -372,14 +389,67 @@ class VehicleMonitorService {
     print('✅ Monitoring started with enhanced analytics');
   }
 
+  // ==================== TRIGGER CHECKING ====================
+
+  Future<void> _checkStressTriggers(String userId) async {
+    try {
+      // 1. Get cached profile (fastest)
+      final profile = await DriverProfileService.getCachedProfile(userId);
+      if (profile == null) return;
+
+      final triggers = List<String>.from(profile['stressTriggers'] ?? []);
+      _activeTriggers = triggers; // Store for dynamic monitoring adjustments
+
+      if (triggers.isEmpty) return;
+
+      final now = DateTime.now();
+      final hour = now.hour;
+
+      // 2. Check Time-based Triggers
+      if (triggers.contains('Morning Rush (6-10 AM)') && hour >= 6 && hour < 10) {
+        _triggerPreventativeAlert(
+            "Morning Rush Detected",
+            "You tend to be more rushed at this time. Take a deep breath and drive smoothly."
+        );
+      }
+      else if (triggers.contains('Evening Traffic (4-10 PM)') && hour >= 16 && hour < 22) {
+        _triggerPreventativeAlert(
+            "Evening Rush Detected",
+            "Traffic might be heavy. Patience is your best fuel saver right now."
+        );
+      }
+      else if (triggers.contains('Late Night Driving') && (hour >= 22 || hour < 5)) {
+        _triggerPreventativeAlert(
+            "Late Night Drive",
+            "Visibility is lower. Keep your speed steady and eyes scanning."
+        );
+      }
+
+    } catch (e) {
+      print('Failed to check stress triggers: $e');
+    }
+  }
+
+  void _triggerPreventativeAlert(String title, String body) {
+    if (_hasWarnedAboutTimeTrigger) return;
+
+    // Wait a few seconds after start so user settles in
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!_isMonitoring) return;
+      sendNotification(title, body);
+      _hasWarnedAboutTimeTrigger = true;
+      print('⚠️ Preventative Alert Sent: $title');
+    });
+  }
+
   // ==================== DIRECTION REVERSAL DETECTION ====================
 
   void _detectDirectionReversal(
-    double currentX,
-    double currentY,
-    double currentZ,
-    double magnitude,
-  ) {
+      double currentX,
+      double currentY,
+      double currentZ,
+      double magnitude,
+      ) {
     if (_lastDirectionX == null ||
         _lastDirectionY == null ||
         _lastDirectionZ == null) {
@@ -399,8 +469,8 @@ class VehicleMonitorService {
 
     double dotProduct =
         (_lastDirectionX! * currentX) +
-        (_lastDirectionY! * currentY) +
-        (_lastDirectionZ! * currentZ);
+            (_lastDirectionY! * currentY) +
+            (_lastDirectionZ! * currentZ);
 
     double lastMagnitude = sqrt(
       _lastDirectionX! * _lastDirectionX! +
@@ -442,100 +512,46 @@ class VehicleMonitorService {
 
   // ==================== NEW TURN DETECTION METHOD ====================
 
-  /// Detects sustained lateral force indicating a turn
-  /// Uses low-pass filter to remove noise and duration check to avoid false positives
   void _detectTurn(double rawLateralForce) {
-    // ============================================================
-    // STEP 1: Apply Low-Pass Filter to smooth the signal
-    // ============================================================
-    // This removes vibrations, bumps, and noise
-    // Formula: smoothed = alpha × new_value + (1 - alpha) × old_smoothed
-
     _smoothedLateralForce =
         (_lpfAlpha * rawLateralForce) +
-        ((1 - _lpfAlpha) * _smoothedLateralForce);
-
-    // ============================================================
-    // STEP 2: Check if vehicle is moving fast enough
-    // ============================================================
-    // We don't want to detect "turns" in parking lots
+            ((1 - _lpfAlpha) * _smoothedLateralForce);
 
     if (currentSpeedKmh < minSpeedForTurnDetection) {
       _turnStartTime = null; // Reset if speed drops
       return;
     }
 
-    // ============================================================
-    // STEP 3: Check if cooldown period has passed
-    // ============================================================
-    // Prevents duplicate detections of the same turn
-
     if (_lastTurnDetection != null &&
         DateTime.now().difference(_lastTurnDetection!) < _turnCooldown) {
       return; // Still in cooldown, ignore
     }
 
-    // ============================================================
-    // STEP 4: Check if lateral force exceeds threshold
-    // ============================================================
-
     if (_smoothedLateralForce.abs() > _turnForceThreshold) {
-      // Potential turn detected!  Start timing it.
-
-      // Start the timer if not already started
       _turnStartTime ??= DateTime.now();
-
-      // Calculate how long the force has been sustained
       int durationMs =
           DateTime.now().difference(_turnStartTime!).inMilliseconds;
 
-      // ============================================================
-      // STEP 5: Validate duration (sustained turn, not a bump)
-      // ============================================================
-
       if (durationMs >= _turnDurationMs) {
-        // This is a REAL turn! Force has been sustained long enough.
-
-        // ============================================================
-        // GYROSCOPE FUSION: Double-check with rotation data
-        // ============================================================
-        // If gyroscope is enabled, we require BOTH:
-        // 1. Lateral force (accelerometer)
-        // 2. Rotation rate (gyroscope)
-        // This gives us 99% accuracy!
-
-        bool gyroConfirmsRotation = true;  // Default to true if not using gyro
+        bool gyroConfirmsRotation = true;
 
         if (_useGyroscopeFusion) {
-          // Check if gyroscope shows rotation
           gyroConfirmsRotation = _smoothedGyroZ.abs() > _gyroRotationThreshold;
-
           if (! gyroConfirmsRotation) {
-            // Accelerometer shows force but gyroscope shows no rotation
-            // This might be a lane change or swerve, NOT a turn
-            print("⚠️ Turn rejected: Lateral force detected but no rotation (lane change?)");
+            print("⚠️ Turn rejected: Lateral force detected but no rotation");
             _turnStartTime = null;
             return;
           }
         }
 
-        // ============================================================
-        // CONFIRMED TURN - Both sensors agree!
-        // ============================================================
-
-        // Determine direction based on sign of lateral force
-        // Positive X = Left turn
-        // Negative X = Right turn
         String direction = _smoothedLateralForce > 0 ? "Left" : "Right";
 
-        // Increment session counters
         if (direction == "Left") {
           _sessionService.incrementLeftTurn();
         } else {
           _sessionService.incrementRightTurn();
         }
 
-        // Enhanced logging with gyroscope data
         String gyroInfo = _useGyroscopeFusion
             ? "Gyro: ${_smoothedGyroZ.abs().toStringAsFixed(3)} rad/s"
             :  "Gyro: disabled";
@@ -548,16 +564,10 @@ class VehicleMonitorService {
                 "   Speed:  ${currentSpeedKmh. toStringAsFixed(0)} km/h"
         );
 
-        // Update tracking variables
         _lastTurnDetection = DateTime.now();
         _turnStartTime = null;  // Reset for next turn
       }
     } else {
-      // ============================================================
-      // STEP 6: Force dropped below threshold - reset timer
-      // ============================================================
-      // This happens when the turn ends or it was a false start
-
       _turnStartTime = null;
     }
   }
@@ -570,10 +580,10 @@ class VehicleMonitorService {
   }
 
   void _checkCrashFromAcceleration(
-    BuildContext context,
-    WidgetRef ref,
-    double avgMagnitude,
-  ) {
+      BuildContext context,
+      WidgetRef ref,
+      double avgMagnitude,
+      ) {
     if (_lastCrashDetection != null &&
         DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
       return;
@@ -583,7 +593,7 @@ class VehicleMonitorService {
 
     double accelFluctuation =
         _accelBuffer[_accelBuffer.length - 1].abs() -
-        _accelBuffer[_accelBuffer.length - 2].abs();
+            _accelBuffer[_accelBuffer.length - 2].abs();
 
     if (accelFluctuation.abs() > 1) {
       _triggerCrashDetection(context, ref);
