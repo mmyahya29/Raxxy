@@ -8,6 +8,7 @@ import 'package:raxxy/providers/vehicle_provider.dart';
 import 'package:raxxy/screens/dashboard_screen.dart';
 import '../../providers/provider.dart';
 import '../../services/maintenance_service.dart';
+import 'ChatBotScreen.dart';
 
 Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild) {
   final mileageController = TextEditingController();
@@ -204,6 +205,86 @@ Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild) {
           error: (e, _) => Center(child: Text("Error: $e")),
         );
       },
+    ),
+  );
+}
+Widget chatbotCardWidget(BuildContext context) {
+  return Container(
+    height: 120.h,
+    width: MediaQuery.of(context).size.width - 40,
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Color(0xff6366f1), Color(0xff8b5cf6)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(30.r),
+      boxShadow: [
+        BoxShadow(
+          color: Colors. black.withOpacity(0.3),
+          blurRadius: 4,
+          spreadRadius: 3,
+        ),
+      ],
+    ),
+    child: InkWell(
+      onTap: () {
+        Navigator. push(
+          context,
+          MaterialPageRoute(builder: (context) => const ChatBotScreen()),
+        );
+      },
+      child:  Padding(
+        padding: EdgeInsets.all(20.r),
+        child: Row(
+          children: [
+            Container(
+              height: 60.h,
+              width: 60.w,
+              decoration: BoxDecoration(
+                color: Colors.white. withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20.r),
+              ),
+              child: Icon(
+                Icons. chat_bubble_outline,
+                color: Colors.white,
+                size: 35.sp,
+              ),
+            ),
+            SizedBox(width: 20.w),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "AI Assistant",
+                    style: TextStyle(
+                      color: Colors. white,
+                      fontSize: 22.sp,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 5.h),
+                  Text(
+                    "Ask me anything about vehicle",
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: Colors.white,
+              size: 20.sp,
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }

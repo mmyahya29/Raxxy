@@ -38,12 +38,12 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
 
     final currentUser = auth.currentUser;
     if (currentUser == null) throw Exception("User not logged in");
-
+//see this function?  yaa, try and replicate this there.
     await firestore
         .collection('users')
         .doc(currentUser.uid)
         .collection('vehicles')
-        .add({
+        .add({//iss add ki jga apny bs apna map pass krna hoga , cool? ok, see ya on whatsapp
       'type': type,
       'make': make,
       'model': model,

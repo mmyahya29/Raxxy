@@ -33,7 +33,9 @@ dependencies:
   flutter_riverpod: ^3.0.0-dev.16
   sensors_plus: ^6.1.1
   geolocator: ^12.0.0
-
+  flutter_chat_ui: ^1.6.12
+  flutter_chat_types: ^3.6.2
+  uuid: ^4.1.0
   flutter_sms:
     path: packages/flutter_sms-2.3.3
 

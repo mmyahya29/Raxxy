@@ -191,7 +191,7 @@ class DriverProfileService {
 
     // Smooth Operator, especially for u, 😏
     if (switchesPerMin < 3 && harshEvents < 0.2) {
-      traits.add('Smooooth Operatoorrr');
+      traits.add('Smooooth Operatoorrr 🌶️');
     }
 
     // Consistent Performance
