@@ -66,10 +66,10 @@ Widget monitorWidget(BuildContext context, DashboardScreen widget){
                 widget.controller.jumpToTab(2);
               },
               child: Container(
-                height: 120.h,
+                height: 130.h,
                 width: MediaQuery.of(context).size.width - 60,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFCFD3EA), // Pastel dark grey accent
+                  color: const Color(0xFFCFD3EA),
                   borderRadius: BorderRadius.circular(30.r),
                   boxShadow: [
                     BoxShadow(

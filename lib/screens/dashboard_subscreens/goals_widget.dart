@@ -64,7 +64,7 @@ Widget goalsWidget(BuildContext context, VoidCallback rebuild){
                               fontSize: 18.sp,
                               fontWeight: FontWeight.w600),),
                           Text("${goal["target"]}", style: TextStyle(
-                              fontSize: 16.sp,
+                              fontSize: 14.sp,
                               color: Color(0xffff3f3f),
                               fontWeight: FontWeight.w600),),
                         ],

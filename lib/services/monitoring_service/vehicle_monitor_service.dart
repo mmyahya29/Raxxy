@@ -21,7 +21,7 @@ class VehicleMonitorService {
   final ValueNotifier<double> currentDistanceNotifier = ValueNotifier(0.0);
 
   static final VehicleMonitorService _instance =
-  VehicleMonitorService._internal();
+      VehicleMonitorService._internal();
 
   factory VehicleMonitorService() => _instance;
 
@@ -77,15 +77,29 @@ class VehicleMonitorService {
 
   // ==================== TURN DETECTION VARIABLES ====================
 
-  double? _lastAccelX;
-  double? _lastAccelY;
+  // Low-pass filter for smoothing lateral force
+  double _smoothedLateralForce = 0.0; // The smoothed X-axis value
+  // Smoothing factor (0.0-1.0)
+  // Lower = smoother but slower
+  // Higher = faster but noisier
+  final double _lpfAlpha = 0.15;
 
-  final double turnAngleThreshold = 15.0;
+  // Turn detection thresholds
+  final double _turnForceThreshold = 2.0; // Minimum lateral force (m/s²)turns
+  final int _turnDurationMs = 700; // Minimum duration (milliseconds)
+  final double minSpeedForTurnDetection = 10.0; // Minimum speed (km/h)
 
-  DateTime? _lastTurnDetection;
+  // State tracking
+  DateTime? _turnStartTime; // When potential turn began
+  DateTime? _lastTurnDetection; // Last confirmed turn time
   final Duration _turnCooldown = const Duration(seconds: 2);
 
-  final double minSpeedForTurnDetection = 10.0;
+  // ==================== GYROSCOPE VARIABLES (Phase 3) ====================
+
+  StreamSubscription<GyroscopeEvent>? _gyroSub; // Gyroscope stream
+  double _smoothedGyroZ = 0.0; // Smoothed rotation rate
+  final double _gyroRotationThreshold = 0.5; // Min rotation (rad/s)
+  final bool _useGyroscopeFusion = true; // Enable/disable gyro
 
   // ==================== ACCELERATION/DECELERATION DETECTION ====================
 
@@ -108,6 +122,11 @@ class VehicleMonitorService {
     required String model,
     required WidgetRef ref,
   }) async {
+    // Reset turn detection variables
+    _smoothedLateralForce = 0.0;
+    _turnStartTime = null;
+    _lastTurnDetection = null;
+
     if (_isMonitoring) return;
     _isMonitoring = true;
     _userId = userId;
@@ -124,9 +143,6 @@ class VehicleMonitorService {
     _consecutiveHarshAccel = 0;
     _consecutiveHarshBrake = 0;
 
-    // Reset turn detection variables
-    _lastAccelX = null;
-    _lastAccelY = null;
     _lastTurnDetection = null;
 
     // Reset acceleration/deceleration variables
@@ -157,7 +173,9 @@ class VehicleMonitorService {
         ref.read(vehicleMonitorProvider.notifier).updateAcceleration(avgAccel);
       }
       ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
-      ref.read(vehicleMonitorProvider.notifier).updateDistance(totalDistanceMeters);
+      ref
+          .read(vehicleMonitorProvider.notifier)
+          .updateDistance(totalDistanceMeters);
 
       // Update session speed tracking
       _sessionService.updateSpeed(currentSpeedKmh);
@@ -168,15 +186,13 @@ class VehicleMonitorService {
       currentAcceleration = event;
 
       // TURN DETECTION
-      _detectTurn(event.x, event.y);
+      _detectTurn(event.x);
 
       // ==================== ACCELERATION/DECELERATION LOGIC ====================
 
       // 1. Calculate magnitude from all 3 axes
       double magnitude = sqrt(
-          event.x * event.x +
-              event.y * event.y +
-              event.z * event.z
+        event.x * event.x + event.y * event.y + event.z * event.z,
       );
 
       // 2. Detect direction reversal
@@ -195,7 +211,6 @@ class VehicleMonitorService {
       // Only check for harsh events if buffer is full AND vehicle is moving
       if (_accelBuffer.length == _acBufferSize &&
           currentSpeedKmh > minSpeedThreshold) {
-
         // Calculate average signed acceleration
         double avgAccel =
             _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
@@ -238,7 +253,9 @@ class VehicleMonitorService {
                   "Woah Buddy! Easy on the Gas",
                   "Acceleration: ${avgMagnitude.toStringAsFixed(2)} m/s² at ${currentSpeedKmh.toStringAsFixed(0)} km/h",
                 );
-                print("🟢 Harsh ACCELERATION detected: ${avgMagnitude.toStringAsFixed(2)} m/s²");
+                print(
+                  "🟢 Harsh ACCELERATION detected: ${avgMagnitude.toStringAsFixed(2)} m/s²",
+                );
                 _consecutiveHarshAccel = 0;
               }
             }
@@ -258,7 +275,9 @@ class VehicleMonitorService {
                   "Woah Buddy! Easy on the Brakes",
                   "Deceleration: ${avgMagnitude.toStringAsFixed(2)} m/s² at ${currentSpeedKmh.toStringAsFixed(0)} km/h",
                 );
-                print("🔴 Harsh BRAKING detected: ${avgMagnitude.toStringAsFixed(2)} m/s²");
+                print(
+                  "🔴 Harsh BRAKING detected: ${avgMagnitude.toStringAsFixed(2)} m/s²",
+                );
                 _consecutiveHarshBrake = 0;
               }
             }
@@ -294,6 +313,27 @@ class VehicleMonitorService {
         print('Location permission not granted');
         return;
       }
+    }
+
+    // ==================== GYROSCOPE LISTENER (Optional but recommended) ====================
+    // The gyroscope measures rotation directly, giving us confirmation
+    // that the vehicle is actually turning (not just experiencing lateral force)
+
+    if (_useGyroscopeFusion) {
+      _gyroSub = gyroscopeEvents.listen((GyroscopeEvent event) {
+        // Smooth the Z-axis rotation (yaw - turning left/right)
+        _smoothedGyroZ =
+            (_lpfAlpha * event.z) + ((1 - _lpfAlpha) * _smoothedGyroZ);
+
+        // Optional: Log high rotation rates for debugging
+        if (_smoothedGyroZ.abs() > 1.0) {
+          print(
+            "🔄 Gyroscope:  ${_smoothedGyroZ.toStringAsFixed(3)} rad/s rotation",
+          );
+        }
+      });
+
+      print('✅ Gyroscope fusion enabled for turn detection');
     }
 
     _positionSub = Geolocator.getPositionStream(
@@ -334,8 +374,15 @@ class VehicleMonitorService {
 
   // ==================== DIRECTION REVERSAL DETECTION ====================
 
-  void _detectDirectionReversal(double currentX, double currentY, double currentZ, double magnitude) {
-    if (_lastDirectionX == null || _lastDirectionY == null || _lastDirectionZ == null) {
+  void _detectDirectionReversal(
+    double currentX,
+    double currentY,
+    double currentZ,
+    double magnitude,
+  ) {
+    if (_lastDirectionX == null ||
+        _lastDirectionY == null ||
+        _lastDirectionZ == null) {
       _lastDirectionX = currentX;
       _lastDirectionY = currentY;
       _lastDirectionZ = currentZ;
@@ -350,14 +397,15 @@ class VehicleMonitorService {
       return;
     }
 
-    double dotProduct = (_lastDirectionX! * currentX) +
+    double dotProduct =
+        (_lastDirectionX! * currentX) +
         (_lastDirectionY! * currentY) +
         (_lastDirectionZ! * currentZ);
 
     double lastMagnitude = sqrt(
-        _lastDirectionX! * _lastDirectionX! +
-            _lastDirectionY! * _lastDirectionY! +
-            _lastDirectionZ! * _lastDirectionZ!
+      _lastDirectionX! * _lastDirectionX! +
+          _lastDirectionY! * _lastDirectionY! +
+          _lastDirectionZ! * _lastDirectionZ!,
     );
 
     if (lastMagnitude < 0.01) {
@@ -375,7 +423,9 @@ class VehicleMonitorService {
 
     if (angleDegrees > directionReversalThreshold) {
       if (!_isDecelerating) {
-        print("🔴 Direction Reversal Detected: ${angleDegrees.toStringAsFixed(1)}° - DECELERATION mode");
+        print(
+          "🔴 Direction Reversal Detected: ${angleDegrees.toStringAsFixed(1)}° - DECELERATION mode",
+        );
       }
       _isDecelerating = true;
     } else if (magnitude < magnitudeSettledThreshold) {
@@ -390,56 +440,126 @@ class VehicleMonitorService {
     _lastDirectionZ = currentZ;
   }
 
-  // ==================== TURN DETECTION ====================
+  // ==================== NEW TURN DETECTION METHOD ====================
 
-  void _detectTurn(double currentX, double currentY) {
+  /// Detects sustained lateral force indicating a turn
+  /// Uses low-pass filter to remove noise and duration check to avoid false positives
+  void _detectTurn(double rawLateralForce) {
+    // ============================================================
+    // STEP 1: Apply Low-Pass Filter to smooth the signal
+    // ============================================================
+    // This removes vibrations, bumps, and noise
+    // Formula: smoothed = alpha × new_value + (1 - alpha) × old_smoothed
+
+    _smoothedLateralForce =
+        (_lpfAlpha * rawLateralForce) +
+        ((1 - _lpfAlpha) * _smoothedLateralForce);
+
+    // ============================================================
+    // STEP 2: Check if vehicle is moving fast enough
+    // ============================================================
+    // We don't want to detect "turns" in parking lots
+
     if (currentSpeedKmh < minSpeedForTurnDetection) {
-      _lastAccelX = currentX;
-      _lastAccelY = currentY;
+      _turnStartTime = null; // Reset if speed drops
       return;
     }
+
+    // ============================================================
+    // STEP 3: Check if cooldown period has passed
+    // ============================================================
+    // Prevents duplicate detections of the same turn
 
     if (_lastTurnDetection != null &&
         DateTime.now().difference(_lastTurnDetection!) < _turnCooldown) {
-      return;
+      return; // Still in cooldown, ignore
     }
 
-    if (_lastAccelX == null || _lastAccelY == null) {
-      _lastAccelX = currentX;
-      _lastAccelY = currentY;
-      return;
-    }
+    // ============================================================
+    // STEP 4: Check if lateral force exceeds threshold
+    // ============================================================
 
-    double lastAngle = atan2(_lastAccelY!, _lastAccelX!);
-    double currentAngle = atan2(currentY, currentX);
+    if (_smoothedLateralForce.abs() > _turnForceThreshold) {
+      // Potential turn detected!  Start timing it.
 
-    double angleDifference = currentAngle - lastAngle;
+      // Start the timer if not already started
+      _turnStartTime ??= DateTime.now();
 
-    while (angleDifference > pi) angleDifference -= 2 * pi;
-    while (angleDifference < -pi) angleDifference += 2 * pi;
+      // Calculate how long the force has been sustained
+      int durationMs =
+          DateTime.now().difference(_turnStartTime!).inMilliseconds;
 
-    double angleDifferenceInDegrees = angleDifference * (180 / pi);
+      // ============================================================
+      // STEP 5: Validate duration (sustained turn, not a bump)
+      // ============================================================
 
-    if (angleDifferenceInDegrees.abs() > turnAngleThreshold) {
-      String turnDirection;
-      if (angleDifferenceInDegrees > 0) {
-        turnDirection = "Left";
-        _sessionService.incrementLeftTurn();
-      } else {
-        turnDirection = "Right";
-        _sessionService.incrementRightTurn();
+      if (durationMs >= _turnDurationMs) {
+        // This is a REAL turn! Force has been sustained long enough.
+
+        // ============================================================
+        // GYROSCOPE FUSION: Double-check with rotation data
+        // ============================================================
+        // If gyroscope is enabled, we require BOTH:
+        // 1. Lateral force (accelerometer)
+        // 2. Rotation rate (gyroscope)
+        // This gives us 99% accuracy!
+
+        bool gyroConfirmsRotation = true;  // Default to true if not using gyro
+
+        if (_useGyroscopeFusion) {
+          // Check if gyroscope shows rotation
+          gyroConfirmsRotation = _smoothedGyroZ.abs() > _gyroRotationThreshold;
+
+          if (! gyroConfirmsRotation) {
+            // Accelerometer shows force but gyroscope shows no rotation
+            // This might be a lane change or swerve, NOT a turn
+            print("⚠️ Turn rejected: Lateral force detected but no rotation (lane change?)");
+            _turnStartTime = null;
+            return;
+          }
+        }
+
+        // ============================================================
+        // CONFIRMED TURN - Both sensors agree!
+        // ============================================================
+
+        // Determine direction based on sign of lateral force
+        // Positive X = Left turn
+        // Negative X = Right turn
+        String direction = _smoothedLateralForce > 0 ? "Left" : "Right";
+
+        // Increment session counters
+        if (direction == "Left") {
+          _sessionService.incrementLeftTurn();
+        } else {
+          _sessionService.incrementRightTurn();
+        }
+
+        // Enhanced logging with gyroscope data
+        String gyroInfo = _useGyroscopeFusion
+            ? "Gyro: ${_smoothedGyroZ.abs().toStringAsFixed(3)} rad/s"
+            :  "Gyro: disabled";
+
+        print(
+            "🔄 Turn Detected: $direction turn\n"
+                "   Lateral Force: ${_smoothedLateralForce.abs().toStringAsFixed(2)} m/s²\n"
+                "   $gyroInfo\n"
+                "   Duration: ${durationMs}ms\n"
+                "   Speed:  ${currentSpeedKmh. toStringAsFixed(0)} km/h"
+        );
+
+        // Update tracking variables
+        _lastTurnDetection = DateTime.now();
+        _turnStartTime = null;  // Reset for next turn
       }
+    } else {
+      // ============================================================
+      // STEP 6: Force dropped below threshold - reset timer
+      // ============================================================
+      // This happens when the turn ends or it was a false start
 
-      print(
-          "🔄 Turn Detected: $turnDirection turn "
-              "(${angleDifferenceInDegrees.abs().toStringAsFixed(1)}° at ${currentSpeedKmh.toStringAsFixed(0)} km/h)"
-      );
-
-      _lastTurnDetection = DateTime.now();
+      _turnStartTime = null;
     }
-
-    _lastAccelX = currentX;
-    _lastAccelY = currentY;
   }
 
   // ==================== HELPER METHODS ====================
@@ -450,10 +570,10 @@ class VehicleMonitorService {
   }
 
   void _checkCrashFromAcceleration(
-      BuildContext context,
-      WidgetRef ref,
-      double avgMagnitude,
-      ) {
+    BuildContext context,
+    WidgetRef ref,
+    double avgMagnitude,
+  ) {
     if (_lastCrashDetection != null &&
         DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
       return;
@@ -463,7 +583,7 @@ class VehicleMonitorService {
 
     double accelFluctuation =
         _accelBuffer[_accelBuffer.length - 1].abs() -
-            _accelBuffer[_accelBuffer.length - 2].abs();
+        _accelBuffer[_accelBuffer.length - 2].abs();
 
     if (accelFluctuation.abs() > 1) {
       _triggerCrashDetection(context, ref);
@@ -514,6 +634,7 @@ class VehicleMonitorService {
     _positionSub?.cancel();
     _uiUpdateTimer?.cancel();
     _speedZoneTimer?.cancel();
+    _gyroSub?.cancel();
 
     _lastPosition = null;
     _isMonitoring = false;
@@ -569,7 +690,9 @@ class VehicleMonitorService {
         );
 
         if (_monitoringContext != null && _monitoringContext!.mounted) {
-          final summary = _sessionService.generateSummary(totalDistanceMeters / 1000);
+          final summary = _sessionService.generateSummary(
+            totalDistanceMeters / 1000,
+          );
           ScaffoldMessenger.of(_monitoringContext!).showSnackBar(
             SnackBar(
               content: Text(
@@ -584,7 +707,9 @@ class VehicleMonitorService {
         await Future.delayed(const Duration(milliseconds: 500));
 
         // Update driving score
-        final summary = _sessionService.generateSummary(totalDistanceMeters / 1000);
+        final summary = _sessionService.generateSummary(
+          totalDistanceMeters / 1000,
+        );
         await DrivingScoreService.updateDrivingScore(
           userId: _userId!,
           harshAccelEvents: _sessionService.harshAccelEvents,

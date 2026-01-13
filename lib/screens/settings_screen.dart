@@ -11,7 +11,6 @@ import '../widgets/reusable_widgets.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
-
   const SettingsScreen({super.key, required this.controller});
 
   @override

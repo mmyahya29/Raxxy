@@ -179,7 +179,7 @@ class DriverProfileService {
       traits.add('Speed Demon');
     }
 
-    // Zen Driver
+    // Calm Driver
     if (harshEvents < 0.1 && switchesPerMin < 2) {
       traits.add('Calm Driver');
     }
