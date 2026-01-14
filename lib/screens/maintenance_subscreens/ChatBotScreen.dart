@@ -7,9 +7,9 @@ import 'package:uuid/uuid.dart';
 
 // 1. Define the Conversation Stages
 enum ChatStage {
-  diagnosing,     // Step 1: User reports symptom, Bot lists causes
-  confirmedIssue, // Step 2: User confirms which part is broken
-  solution        // Step 3: Bot gives fixes/advice
+  diagnosing,     // Step 1: User reports symptom
+  confirmedIssue, // Step 2: User confirms issue
+  solution        // Step 3: Bot gives fixes
 }
 
 class ChatBotScreen extends StatefulWidget {
@@ -33,15 +33,15 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   String? _identifiedIssue;
 
   // 3. API Configuration
-  // TODO: Replace with your actual Hugging Face Access Token
+  // IMPORTANT: Do not share this key publicly!
   final String _apiKey = "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";
   final String _apiUrl = "https://api.groq.com/openai/v1/chat/completions";
-  final String _model = "llama-3.1-8b-instant"; // Fast and very smart
+  final String _model = "llama-3.1-8b-instant";
 
   @override
   void initState() {
     super.initState();
-    _addMessage(_bot, "Hello! I'm your automotive troubleshooting assistant. What problem are you experiencing with your vehicle?");
+    _addMessage(_bot, "Hello! I'm your AI Mechanic. What's wrong with your vehicle today?");
   }
 
   @override
@@ -50,6 +50,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
       appBar: AppBar(
         title: const Text("AI Mechanic"),
         backgroundColor: const Color(0xff6366f1),
+        elevation: 0,
       ),
       body: Chat(
         messages: _messages,
@@ -58,7 +59,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
         theme: DefaultChatTheme(
           primaryColor: const Color(0xff6366f1),
           secondaryColor: const Color(0xfff3f4f6),
-          inputBackgroundColor: Colors.blueGrey,
+          inputBackgroundColor: Colors.blueGrey[800]!,
         ),
       ),
     );
@@ -67,57 +68,44 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   // --- Core Message Handling ---
 
   void _handleUserMessage(types.PartialText message) async {
-    // 1. Show User Message
     _addMessage(_user, message.text);
 
-    // 2. Generate Logic-Based Prompt
     final prompt = _generatePrompt(message.text);
 
-    // 3. Call Hugging Face API
     try {
-      final botReply = await _callHuggingFaceApi(prompt);
+      final botReply = await _callApi(prompt);
 
-      // 4. Update Conversation State for next time
+      // Update state AFTER successful API call
       _advanceConversationState(message.text);
 
-      // 5. Show Bot Response
       _addMessage(_bot, botReply);
-
     } catch (e) {
-      _addMessage(_bot, "I'm having trouble connecting to the server. Please check your internet or API key.");
-      debugPrint(e.toString());
+      _addMessage(_bot, "Sorry, I hit a snag. Please check your connection or API key.");
+      debugPrint("Error details: $e");
     }
   }
 
-  // --- The "Brain": Prompt Engineering ---
+  // --- The Brain: Prompt Engineering ---
 
   String _generatePrompt(String userInput) {
     switch (_currentStage) {
-
       case ChatStage.diagnosing:
-      // Stage 1: Diagnosis Prompt
         return """
-You are an expert automotive troubleshooting assistant.
-User reports the following issue: "$userInput"
-Explain possible causes in simple terms and list defective parts.
-Ask the user to confirm which issue they found.
+You are an expert mechanic. The user says: "$userInput".
+1. List 3-4 likely causes.
+2. Mention the specific parts that might be broken.
+3. Ask the user to check one thing or confirm which symptom fits best.
+Keep it concise and helpful.
 """;
 
       case ChatStage.confirmedIssue:
-      // Stage 2: Solution Prompt
-      // We assume the user's input IS the confirmation (e.g., "It's the spark plugs")
         return """
-You are an automotive troubleshooting assistant.
-The user identified this issue: "$userInput"
-Explain easy fixes, safety precautions, and when to visit a mechanic.
+The user has confirmed or provided more info: "$userInput".
+Provide a step-by-step fix, safety warnings, and tell them if this is a "DIY" job or requires a professional.
 """;
 
       case ChatStage.solution:
-      // Stage 3: General Advice / Wrap up
-        return """
-User question: "$userInput"
-Provide a helpful, short automotive maintenance tip or answer related to the question.
-""";
+        return "The user asks: $userInput. Provide a quick tip or follow-up answer regarding vehicle maintenance.";
     }
   }
 
@@ -126,20 +114,17 @@ Provide a helpful, short automotive maintenance tip or answer related to the que
   void _advanceConversationState(String userInput) {
     setState(() {
       if (_currentStage == ChatStage.diagnosing) {
-        // After we diagnose, we move to waiting for confirmation
         _currentStage = ChatStage.confirmedIssue;
       } else if (_currentStage == ChatStage.confirmedIssue) {
-        // After they confirm the issue, we move to solution mode
-        _identifiedIssue = userInput; // Save what they said was wrong
+        _identifiedIssue = userInput;
         _currentStage = ChatStage.solution;
       }
-      // If in solution mode, we stay there or could reset based on logic
     });
   }
 
-  // --- API Connection ---
+  // --- API Connection (FIXED FOR GROQ) ---
 
-  Future<String> _callHuggingFaceApi(String prompt) async {
+  Future<String> _callApi(String prompt) async {
     final response = await http.post(
       Uri.parse(_apiUrl),
       headers: {
@@ -151,7 +136,7 @@ Provide a helpful, short automotive maintenance tip or answer related to the que
         "messages": [
           {
             "role": "system",
-            "content": "You are a helpful automotive troubleshooting assistant."
+            "content": "You are a professional automotive mechanic assistant. You help users diagnose car problems and suggest fixes."
           },
           {
             "role": "user",
@@ -159,25 +144,23 @@ Provide a helpful, short automotive maintenance tip or answer related to the que
           }
         ],
         "temperature": 0.7,
-        "max_tokens": 500,
       }),
     );
 
-    // Debugging: If it fails, print the status so we know why
-    if (response.statusCode != 200) {
-      print("Failed with status: ${response.statusCode}");
-      print("Response body: ${response.body}");
-    }
-
     if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      if (data.isNotEmpty && data[0]['generated_text'] != null) {
-        return data[0]['generated_text'].trim();
-      }
-    }
+      // FIXED: Groq returns a Map (Object), not a List
+      final Map<String, dynamic> data = jsonDecode(response.body);
 
-    throw Exception("Failed to load response: ${response.statusCode}");
+      // Navigate the Groq/OpenAI JSON structure
+      if (data.containsKey('choices') && data['choices'].isNotEmpty) {
+        return data['choices'][0]['message']['content'].trim();
+      }
+      return "I received an empty response from the engine.";
+    } else {
+      throw Exception("Server Error: ${response.statusCode} - ${response.body}");
+    }
   }
+
   // Helper to update UI
   void _addMessage(types.User author, String text) {
     final message = types.TextMessage(
