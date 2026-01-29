@@ -35,29 +35,25 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
       PersistentBottomNavBarItem(
         icon: const Icon(Icons.dashboard),
         title: ("Dashboard"),
-        activeColorPrimary: (Theme.of(context).brightness == Brightness.light)?Color(0xFF3F51B5):Color(
-            0xFF6D81CA),
+        activeColorPrimary: Color(0xFFFFFFFF),
         inactiveColorPrimary: Colors.grey,
       ),
       PersistentBottomNavBarItem(
         icon: const Icon(Icons.build),
         title: ("Maintenance"),
-        activeColorPrimary: (Theme.of(context).brightness == Brightness.light)?Color(0xFF3F51B5):Color(
-            0xFF6D81CA),
+        activeColorPrimary: Color(0xFFFFFFFF),
         inactiveColorPrimary: Colors.grey,
       ),
       PersistentBottomNavBarItem(
         icon: const Icon(Icons.directions_car),
         title: ("Vehicles"),
-        activeColorPrimary: (Theme.of(context).brightness == Brightness.light)?Color(0xFF3F51B5):Color(
-            0xFF6D81CA),
+        activeColorPrimary: Color(0xFFFFFFFF),
         inactiveColorPrimary: Colors.grey,
       ),
       PersistentBottomNavBarItem(
         icon: const Icon(Icons.settings),
         title: ("Settings"),
-        activeColorPrimary: (Theme.of(context).brightness == Brightness.light)?Color(0xFF3F51B5):Color(
-            0xFF6D81CA),
+        activeColorPrimary: Color(0xFFFFFFFF),
         inactiveColorPrimary: Colors.grey,
       ),
     ];
@@ -71,7 +67,7 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
       screens: _buildScreens(),
       items: _navBarsItems(),
       confineToSafeArea: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Theme.of(context).appBarTheme.backgroundColor!,
       navBarStyle: NavBarStyle.style1,
     );
   }

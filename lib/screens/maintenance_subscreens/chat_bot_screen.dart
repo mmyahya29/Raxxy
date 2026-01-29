@@ -4,6 +4,7 @@ import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // 1. Define the Conversation Stages
 enum ChatStage {
@@ -34,7 +35,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
   // 3. API Configuration
   // IMPORTANT: Do not share this key publicly!
-  final String _apiKey = "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";
+  final String _apiKey = dotenv.env['API_KEY'] ?? 'default_value';
   final String _apiUrl = "https://api.groq.com/openai/v1/chat/completions";
   final String _model = "llama-3.1-8b-instant";
 
@@ -49,17 +50,20 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("AI Mechanic"),
-        backgroundColor: const Color(0xff6366f1),
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
       ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Chat(
         messages: _messages,
         onSendPressed: _handleUserMessage,
         user: _user,
         theme: DefaultChatTheme(
-          primaryColor: const Color(0xff6366f1),
-          secondaryColor: const Color(0xfff3f4f6),
-          inputBackgroundColor: Colors.blueGrey[800]!,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          primaryColor: Color(0xFF8A3AE1),
+          secondaryColor: Color(0xFFD1D1D1),
+          inputBackgroundColor: Color(0xFF68308A),
+          sendButtonIcon: Icon(Icons.send, color: Theme.of(context).textTheme.bodySmall?.color,)
         ),
       ),
     );
