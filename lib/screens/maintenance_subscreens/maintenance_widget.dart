@@ -8,7 +8,7 @@ import 'package:raxxy/providers/vehicle_provider.dart';
 import 'package:raxxy/screens/dashboard_screen.dart';
 import '../../providers/provider.dart';
 import '../../services/maintenance_service.dart';
-import 'ChatBotScreen.dart';
+import 'chat_bot_screen.dart';
 
 Widget maintenanceLogWidget(BuildContext context, VoidCallback rebuild) {
   final mileageController = TextEditingController();

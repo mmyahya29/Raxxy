@@ -10,12 +10,13 @@ import 'package:raxxy/firebase_options.dart';
 import 'package:raxxy/providers/theme_provider.dart';
 import 'package:raxxy/services/notifications_services.dart';
 import 'bottom_nav_bar.dart';
-import 'services/crash_detector.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: "raxxy.env");
 
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -72,124 +73,191 @@ class _MyAppState extends ConsumerState<MyApp> {
     return ScreenUtilInit(
       designSize: const Size(360, 740),
       builder: (_, __) => MaterialApp(
-      navigatorKey: navigatorKey,
-      themeMode: themeMode,
+        navigatorKey: navigatorKey,
+        themeMode: themeMode,
 
-      // Theme configuration with pale lilac and pastel blue color scheme
-      theme: ThemeData(
-        brightness: Brightness.light,
+        // Theme configuration with pale lilac and pastel blue color scheme
+        theme: ThemeData(
+          brightness: Brightness.light,
+          scaffoldBackgroundColor: const Color(0xFFEBE3F4), // Pale lilac
+          cardColor: Color(0xffe6e6e6),
 
-        // Background color (pale lilac)
-        scaffoldBackgroundColor: const Color(0xFFF0E6FF),
-
-        // Main accent color (pastel blue)
-        primaryColor: const Color(0xFFB8C5E6),
-
-        colorScheme: const ColorScheme.light(
-          primary: Color(0xFFB8C5E6),    // pastel blue
-          secondary: Color(0xFFD4C1F0),   // pale lilac
-          // NOTE: 'tertiary' may not exist on older SDKs; if there's an error remove this line.
-          tertiary: Color(0xFF7986CB),    // darker blue for contrast
-        ),
-
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFB8C5E6),
-          titleTextStyle: TextStyle(
-            color: Color(0xFF2C3E6E),    // darker blue text
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF79399F), // Main accent (used in text/icons)
+            onPrimary: Colors.white,
+            secondary: Color(0xFFD4C1F0), // Pale lilac
+            onSecondary: Color(0xFF2C3E6E),
+            surface: Color(0xFFEBE3F4),
+            onSurface: Color(0xFF2C3E6E),
+            tertiary: Color(0xFF7986CB), // Darker blue for contrast
+            error: Color(0xFFB00020),
           ),
-          iconTheme: IconThemeData(color: Color(0xFF2C3E6E)),
-          elevation: 3,
-          shadowColor: Color(0xFF9FA8DA),
-        ),
 
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.transparent, // 👈 Yeh sabse important change!
-          border: InputBorder.none,
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(30)),
-            borderSide: BorderSide(color: Colors.transparent),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(30)),
-            borderSide: BorderSide(color: Colors.transparent),
-          ),
-        ),
-
-        cardTheme: CardThemeData(
-          elevation: 4,
-          color: Color(0xFF9FA8DA),
-          shadowColor: Color(0xFF000000).withOpacity(0.3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-
-
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(
-            color: Color(0xFF2C3E6E),
-            fontSize: 16,
-          ),
-          bodyMedium: TextStyle(
-            color: Color(0xFF3F51B5),
-            fontSize: 14,
-          ),
-          titleLarge: TextStyle(
-            color: Color(0xFF2C3E6E),
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFB8C5E6),
-            foregroundColor: const Color(0xFF2C3E6E),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 12,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xFF79399F), // Deep purple
+            titleTextStyle: TextStyle(
+              color: Color(0xFFEBE3F4), // Light text on dark app bar
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
             ),
+            iconTheme: IconThemeData(color: Color(0xFFEBE3F4)),
             elevation: 3,
-            shadowColor: Color(0xFF9FA8DA).withOpacity(0.3),
+            shadowColor: Color(0xFF9FA8DA),
+          ),
+
+          inputDecorationTheme: const InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.transparent,
+            border: InputBorder.none,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(30)),
+              borderSide: BorderSide(color: Colors.transparent),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(30)),
+              borderSide: BorderSide(color: Colors.transparent),
+            ),
+          ),
+
+          cardTheme: CardThemeData(
+            elevation: 4,
+            color: const Color(0xFF9FA8DA),
+            shadowColor: const Color(0xFF000000).withOpacity(0.3),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20.r),
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+
+          textTheme: const TextTheme(
+            bodyLarge: TextStyle(
+              color: Color(0xFF2C3E6E), // Darker blue text
+              fontSize: 16,
+            ),
+            bodyMedium: TextStyle(
+              color: Color(0xFF3F51B5), // Accent blue
+              fontSize: 14,
+            ),
+            titleLarge: TextStyle(
+              color: Color(0xFF2C3E6E),
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFB8C5E6),
+              foregroundColor: const Color(0xFF2C3E6E),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 12,
+              ),
+              elevation: 3,
+              shadowColor: const Color(0xFF9FA8DA).withOpacity(0.3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20.r),
+              ),
             ),
           ),
         ),
-      ), // <-- important comma here
 
-      // Dark Theme
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF36303A),
+        // Dark Theme
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+          scaffoldBackgroundColor: Color(0xFF323232),
+          cardColor: Color(0xff393939),
 
-        // Main accent color (pastel blue)
-        primaryColor: const Color(0xFF2F3F47),
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFFFFFFFF), // Light blue-grey for dark mode primary
+            onPrimary: Color(0xFF2C3E6E),
+            secondary: Color(0xFF31293E), // Dark lilac
+            onSecondary: Color(0xFFB8C5E6),
+            surface: Color(0xFF36303A),
+            onSurface: Color(0xFFB8C5E6),
+            tertiary: Color(0xFF7986CB),
+            error: Color(0xFFCF6679),
+          ),
 
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF000000),    // pastel blue
-          secondary: Color(0xFF31293E),   // pale lilac
-          // NOTE: 'tertiary' may not exist on older SDKs; if there's an error remove this line.
-          tertiary: Color(0xFF7986CB),    // darker blue for contrast
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xFF68308A), // Dark grey-blue
+            titleTextStyle: TextStyle(
+              color: Color(0xFFB8C5E6),
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+            iconTheme: IconThemeData(color: Color(0xFFB8C5E6)),
+            elevation: 3,
+            shadowColor: Color(0xFF000000),
+          ),
+
+          inputDecorationTheme: const InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.transparent,
+            border: InputBorder.none,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(30)),
+              borderSide: BorderSide(color: Colors.transparent),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(30)),
+              borderSide: BorderSide(color: Colors.transparent),
+            ),
+          ),
+
+          cardTheme: CardThemeData(
+            elevation: 4,
+            color: Color(0xFF333333), // Slightly lighter than background
+            shadowColor: Color(0xFF000000).withOpacity(0.5),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+
+          textTheme: const TextTheme(
+            bodyLarge: TextStyle(
+              color: Color(0xFFECDFF6),
+              fontSize: 16,
+            ),
+            bodyMedium: TextStyle(
+              color: Color(0xFFECDFF6),
+              fontSize: 14,
+            ),
+            titleLarge: TextStyle(
+              color: Color(0xFFECDFF6),
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFB8C5E6),
+              foregroundColor: const Color(0xFF2C3E6E),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 12,
+              ),
+              elevation: 3,
+              shadowColor: const Color(0xFF000000).withOpacity(0.3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20.r),
+              ),
+            ),
+          ),
+        ),
+
+        debugShowCheckedModeBanner: false,
+
+        home: authState.when(
+          data: (user) => user != null ? PersistentNavWrapper() : LoginScreen(),
+          loading: () => const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Scaffold(
+            body: Center(child: Text('Error: $e')),
+          ),
         ),
       ),
-
-      debugShowCheckedModeBanner: false,
-
-      home: authState.when(
-        data: (user) =>
-        user != null ? PersistentNavWrapper() : LoginScreen(),
-        loading: () => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
-        error: (e, _) => Scaffold(
-          body: Center(child: Text('Error: $e')),
-        ),
-      ),
-    ),
     );
   }
 }

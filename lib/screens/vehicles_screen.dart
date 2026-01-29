@@ -620,7 +620,7 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xff6259ff),
+                  backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20.0),
                   ),
