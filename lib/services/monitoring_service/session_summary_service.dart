@@ -5,6 +5,10 @@ class SessionSummaryService {
   DateTime? _sessionStart;
   DateTime? _sessionEnd;
 
+  int _smoothTurns = 0;
+  int _jerkyTurns = 0;
+  int _normalTurns = 0;
+
   double _maxSpeed = 0.0;
   double _minSpeed = double.infinity;
   double _speedSum = 0.0;
@@ -58,6 +62,12 @@ class SessionSummaryService {
     _fastTimeSeconds = 0;
 
     print('📊 Session started at $_sessionStart');
+  }
+
+  void recordTurnQuality(String quality) {
+    if (quality == "Smooth") _smoothTurns++;
+    else if (quality == "Jerky") _jerkyTurns++;
+    else _normalTurns++;
   }
 
   /// Update speed metrics (called every 500ms by monitoring service)
@@ -252,19 +262,24 @@ class SessionSummaryService {
       'rightTurns': _rightTurns,
       'totalTurns': _leftTurns + _rightTurns,
 
-      // NEW: Acceleration/Deceleration switch metrics
+      // Turn Quality
+      'smoothTurns': _smoothTurns,
+      'jerkyTurns': _jerkyTurns,
+      'normalTurns': _normalTurns,
+
+      // Acceleration/Deceleration switch metrics
       'accelToDecelSwitches': _accelToDecelSwitches,
       'decelToAccelSwitches': _decelToAccelSwitches,
       'totalSwitches': totalSwitches,
       'switchesPerMinute': durationMinutes > 0 ? double.parse((totalSwitches / durationMinutes).toStringAsFixed(2)) : 0.0,
 
-      // NEW: Speed zone distribution (in seconds)
+      // Speed zone distribution (in seconds)
       'stoppedTimeSeconds': _stoppedTimeSeconds,
       'slowTimeSeconds': _slowTimeSeconds,
       'moderateTimeSeconds': _moderateTimeSeconds,
       'fastTimeSeconds': _fastTimeSeconds,
 
-      // NEW: Session type probabilities (0-1 range)
+      // Session type probabilities (0-1 range)
       'highwayProbability': double.parse(probabilities['highwayProbability']!.toStringAsFixed(3)),
       'cityProbability': double.parse(probabilities['cityProbability']!.toStringAsFixed(3)),
 

@@ -97,15 +97,17 @@ class VehicleMonitorService {
   DateTime? _lastTurnDetection; // Last confirmed turn time
   final Duration _turnCooldown = const Duration(seconds: 2);
 
-  // ==================== GYROSCOPE VARIABLES (Phase 3) ====================
+  // Turn Quality
+  double? _turnEntrySpeed; // Speed when turn started
+  double _turnPeakForce = 0.0; // Max lateral force observed during turn
 
+  // GYROSCOPE VARIABLES
   StreamSubscription<GyroscopeEvent>? _gyroSub; // Gyroscope stream
   double _smoothedGyroZ = 0.0; // Smoothed rotation rate
   final double _gyroRotationThreshold = 0.5; // Min rotation (rad/s)
   final bool _useGyroscopeFusion = true; // Enable/disable gyro
 
-  // ==================== ACCELERATION/DECELERATION DETECTION ====================
-
+  // ACCELERATION/DECELERATION DETECTION
   double? _lastDirectionX;
   double? _lastDirectionY;
   double? _lastDirectionZ;
@@ -115,7 +117,6 @@ class VehicleMonitorService {
   final double magnitudeSettledThreshold = 0.5;
   final double directionReversalThreshold = 160.0;
 
-  // =================================================================================
 
   Future<void> startMonitoring({
     required BuildContext context,
@@ -510,70 +511,105 @@ class VehicleMonitorService {
     _lastDirectionZ = currentZ;
   }
 
-  // ==================== NEW TURN DETECTION METHOD ====================
-
+  // TURN DETECTION METHOD
   void _detectTurn(double rawLateralForce) {
+    // 1. Smooth the lateral force
     _smoothedLateralForce =
-        (_lpfAlpha * rawLateralForce) +
-            ((1 - _lpfAlpha) * _smoothedLateralForce);
+        (_lpfAlpha * rawLateralForce) + ((1 - _lpfAlpha) * _smoothedLateralForce);
 
+    // 2. Speed Check: Ignore turns if moving too slowly (e.g., parking lot maneuvers)
     if (currentSpeedKmh < minSpeedForTurnDetection) {
-      _turnStartTime = null; // Reset if speed drops
+      _turnStartTime = null;
+      _turnEntrySpeed = null;
+      _turnPeakForce = 0.0;
       return;
     }
 
+    // 3. Cooldown Check: Don't detect a new turn immediately after another
     if (_lastTurnDetection != null &&
         DateTime.now().difference(_lastTurnDetection!) < _turnCooldown) {
-      return; // Still in cooldown, ignore
+      return;
     }
 
+    // 4. Turn Logic
     if (_smoothedLateralForce.abs() > _turnForceThreshold) {
-      _turnStartTime ??= DateTime.now();
+
+      // --- START OF TURN ---
+      if (_turnStartTime == null) {
+        _turnStartTime = DateTime.now();
+        _turnEntrySpeed = currentSpeedKmh;            // Capture Entry Speed
+        _turnPeakForce = _smoothedLateralForce.abs(); // Initialize Peak Force
+      }
+      // --- DURING TURN ---
+      else {
+        // Continuously update peak force if current force is higher
+        if (_smoothedLateralForce.abs() > _turnPeakForce) {
+          _turnPeakForce = _smoothedLateralForce.abs();
+        }
+      }
+
+      // Check duration
       int durationMs =
           DateTime.now().difference(_turnStartTime!).inMilliseconds;
 
+      // --- TURN CONFIRMED ---
       if (durationMs >= _turnDurationMs) {
         bool gyroConfirmsRotation = true;
 
+        // Gyroscope Validation (if enabled)
         if (_useGyroscopeFusion) {
           gyroConfirmsRotation = _smoothedGyroZ.abs() > _gyroRotationThreshold;
-          if (! gyroConfirmsRotation) {
+          if (!gyroConfirmsRotation) {
             print("⚠️ Turn rejected: Lateral force detected but no rotation");
             _turnStartTime = null;
+            _turnEntrySpeed = null;
+            _turnPeakForce = 0.0;
             return;
           }
         }
 
         String direction = _smoothedLateralForce > 0 ? "Left" : "Right";
 
+        // Update basic counts
         if (direction == "Left") {
           _sessionService.incrementLeftTurn();
         } else {
           _sessionService.incrementRightTurn();
         }
 
+        // --- NEW: QUALITY ANALYSIS ---
+        // Capture Exit Speed and Analyze
+        double finalEntrySpeed = _turnEntrySpeed ?? currentSpeedKmh;
+        double exitSpeed = currentSpeedKmh;
+
+        _analyzeTurnQuality(finalEntrySpeed, exitSpeed, _turnPeakForce);
+
+        // Logging
         String gyroInfo = _useGyroscopeFusion
             ? "Gyro: ${_smoothedGyroZ.abs().toStringAsFixed(3)} rad/s"
-            :  "Gyro: disabled";
+            : "Gyro: disabled";
 
-        print(
-            "🔄 Turn Detected: $direction turn\n"
-                "   Lateral Force: ${_smoothedLateralForce.abs().toStringAsFixed(2)} m/s²\n"
-                "   $gyroInfo\n"
-                "   Duration: ${durationMs}ms\n"
-                "   Speed:  ${currentSpeedKmh. toStringAsFixed(0)} km/h"
-        );
+        print("🔄 Turn Detected: $direction turn\n"
+            "   Peak Force: ${_turnPeakForce.toStringAsFixed(2)} m/s²\n"
+            "   $gyroInfo\n"
+            "   Duration: ${durationMs}ms\n"
+            "   Speed: ${currentSpeedKmh.toStringAsFixed(0)} km/h");
 
+        // Reset state
         _lastTurnDetection = DateTime.now();
-        _turnStartTime = null;  // Reset for next turn
+        _turnStartTime = null;
+        _turnEntrySpeed = null;
+        _turnPeakForce = 0.0;
       }
     } else {
+      // Force dropped below threshold -> Reset potential turn
       _turnStartTime = null;
+      _turnEntrySpeed = null;
+      _turnPeakForce = 0.0;
     }
   }
 
-  // ==================== HELPER METHODS ====================
-
+  // HELPER METHODS
   bool _shouldSendNotification(DateTime? lastNotification) {
     if (lastNotification == null) return true;
     return DateTime.now().difference(lastNotification) > _notificationCooldown;
@@ -776,5 +812,60 @@ class VehicleMonitorService {
     ref.read(vehicleMonitorProvider.notifier).clear();
     _monitoringContext = null;
     print('Monitoring stopped');
+  }
+
+  void _analyzeTurnQuality(double entrySpeed, double exitSpeed, double peakForce) {
+    String quality = "Normal";
+    String reason = "";
+
+    // Calculate Speed Delta
+    // Positive result = Speed dropped (braking)
+    // Negative result = Speed increased (accelerating)
+    double speedDrop = entrySpeed - exitSpeed;
+
+    // --- THRESHOLDS ---
+    // Smooth limit: Forces below this are generally comfortable
+    const double smoothForceLimit = 3.5; // m/s²
+
+    // Jerky limit: Forces above this feel aggressive to passengers
+    const double jerkyForceLimit = 5.5;  // m/s²
+
+    // Speed drop: Slowing down by more than 15 km/h *during* the turn usually
+    // means the driver entered too fast and panic-braked.
+    const double significantSpeedDrop = 15.0; // km/h
+
+    // --- SCORING LOGIC ---
+
+    if (peakForce > jerkyForceLimit) {
+      quality = "Jerky";
+      reason = "High G-Force (${peakForce.toStringAsFixed(1)} m/s²)";
+    }
+    else if (speedDrop > significantSpeedDrop) {
+      quality = "Jerky";
+      reason = "Hard Braking in Turn (-${speedDrop.toStringAsFixed(1)} km/h)";
+    }
+    // To get "Smooth", you must have low force AND consistent speed (no hard braking)
+    else if (peakForce < smoothForceLimit && speedDrop < 10.0) {
+      quality = "Smooth";
+      reason = "Controlled & Steady";
+    }
+
+    // --- RECORDING & FEEDBACK ---
+
+    // Record to session service (Ensure you added recordTurnQuality to SessionSummaryService)
+    _sessionService.recordTurnQuality(quality);
+
+    print("🏁 Turn Quality: $quality | $reason | Entry: ${entrySpeed.toStringAsFixed(1)} -> Exit: ${exitSpeed.toStringAsFixed(1)}");
+
+    // Optional: Trigger a notification for bad turns if not in cooldown
+    if (quality == "Jerky") {
+      // Re-using your existing notification cooldown logic
+      if (_shouldSendNotification(_lastHarshAccelNotification)) { // piggybacking on harsh accel timer or create a new one
+        sendNotification(
+            "Rough Corner Detected",
+            "Try braking before the turn, not during it."
+        );
+      }
+    }
   }
 }
