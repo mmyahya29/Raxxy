@@ -8,7 +8,7 @@ import '../../services/maintenance_service.dart';
 
 Widget summaryWidget(BuildContext context, VoidCallback rebuild) {
   return Container(
-    height: 300.h,
+    height: 400.h,
     width: MediaQuery.of(context).size.width - 40,
     decoration: BoxDecoration(
       color: Theme.of(context).cardColor,
