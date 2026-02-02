@@ -6,7 +6,7 @@ import 'package:raxxy/services/crash_detector.dart';
 import 'package:raxxy/services/monitoring_service/session_summary_service.dart';
 import 'package:raxxy/services/monitoring_service/driving_score_service.dart';
 import 'package:raxxy/services/monitoring_service/goal_generation_service.dart';
-import 'package:raxxy/services/driver_profile_service.dart'; // Import DriverProfileService
+import 'package:raxxy/services/driver_profile_service.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -16,6 +16,62 @@ import '../../providers/safety_feature_provider.dart';
 import '../notifications_services.dart';
 
 class VehicleMonitorService {
+
+  // ==============================================================================
+  // 🔧 SENSITIVITY & TESTING CONFIGURATION (CHANGE THESE FOR TESTING)
+  // ==============================================================================
+
+  // --- GENERAL THRESHOLDS ---
+  // Minimum speed to consider the car "moving" for event detection
+  static const double _kMinSpeedThresholdKmh = 5.0; // Default: 10.0 (Lowered for testing)
+
+  // --- ACCELERATION & BRAKING ---
+  // G-Force required to trigger Harsh Acceleration/Braking
+  // 1 G = 9.8 m/s². 2.0 m/s² is approx 0.2G (mild).
+  // For hard testing, keep this low. For production, raise to ~2.5 - 3.0.
+  static const double _kAccelerationThreshold = 1.8;
+
+  // How much "jitter" (noise) allowed before we discard the data
+  static const double _kJitterThreshold = 2.0;
+
+  // --- TURNING SENSITIVITY ---
+  // Lateral force (m/s²) required to detect a turn
+  static const double _kTurnForceThreshold = 1.5; // Default: 2.0 (Lowered for sensitivity)
+  // How long (ms) a lateral force must exist to be a "turn" and not a lane change
+  static const int _kTurnDurationMs = 500; // Default: 700 (Shortened for easier detection)
+  // Smoothing factor for lateral force (0.0 = infinite smoothing, 1.0 = raw data)
+  static const double _kLpfAlpha = 0.15;
+
+  // --- GYROSCOPE ---
+  // Minimum rotation rate (rad/s) to confirm a turn
+  static const double _kGyroRotationThreshold = 0.3; // Default: 0.5
+
+  // --- TURN QUALITY SCORING ---
+  // Below this lateral force, a turn is "Smooth"
+  static const double _kSmoothTurnLimit = 3.0;
+  // Above this lateral force, a turn is "Jerky"
+  static const double _kJerkyTurnLimit = 5.0;
+  // If speed drops by this much (km/h) during a turn, it's "Jerky"
+  static const double _kSignificantSpeedDrop = 12.0;
+
+  // --- CRASH DETECTION ---
+  // Immediate change in acceleration (jerk) to suspect a crash
+  static const double _kCrashAccelFluctuationLimit = 1.0;
+  // Speed drop (km/h) within 1.5 seconds to suspect a crash
+  static const double _kCrashSpeedDropLimit = -15.0;
+
+  // --- COOLDOWN TIMERS (Hardcoded for crucial testing flow) ---
+  // Time between Harsh Event Notifications
+  static const Duration _kNotificationCooldown = Duration(seconds: 3); // Default: 5s
+  // Time between detecting separate Turns
+  static const Duration _kTurnCooldown = Duration(seconds: 1); // Default: 2s
+  // Time between Crash triggers
+  static const Duration _kCrashCooldown = Duration(seconds: 10);
+
+  // ==============================================================================
+  // END OF CONFIGURATION
+  // ==============================================================================
+
   final ValueNotifier<String?> monitoredVehicleIdNotifier = ValueNotifier(null);
   final ValueNotifier<double> currentSpeedNotifier = ValueNotifier(0.0);
   final ValueNotifier<double> currentAccelerationNotifier = ValueNotifier(0.0);
@@ -35,7 +91,7 @@ class VehicleMonitorService {
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
   StreamSubscription<Position>? _positionSub;
   Timer? _uiUpdateTimer;
-  Timer? _speedZoneTimer; // For tracking speed zones every second
+  Timer? _speedZoneTimer;
 
   UserAccelerometerEvent? currentAcceleration;
   double currentSpeedKmh = 0.0;
@@ -47,16 +103,9 @@ class VehicleMonitorService {
 
   bool _isMonitoring = false;
 
-  // Threshold values
-  final double accelerationThreshold = 2.0;
-
   final List<double> _accelBuffer = [];
   final int _acBufferSize = 10;
-
-  // Filtering parameters
-  final double minSpeedThreshold = 0.0;
   final int sustainedSampleCount = 1;
-  final double jitterThreshold = 2.0;
 
   String? _userId;
   String? _vehicleId;
@@ -64,11 +113,9 @@ class VehicleMonitorService {
   // Notification cooldown
   DateTime? _lastHarshAccelNotification;
   DateTime? _lastHarshBrakeNotification;
-  final Duration _notificationCooldown = const Duration(seconds: 5);
 
   // Crash detection cooldown
   DateTime? _lastCrashDetection;
-  final Duration _crashCooldown = const Duration(seconds: 10);
 
   // Tracking variables for sustained events
   int _consecutiveHarshAccel = 0;
@@ -80,33 +127,24 @@ class VehicleMonitorService {
   // ==================== TRIGGER TRACKING ====================
   bool _hasWarnedAboutTimeTrigger = false;
   List<String> _activeTriggers = [];
-  int _lowSpeedCounter = 0; // To track duration of low speed for traffic inference
+  int _lowSpeedCounter = 0;
 
   // ==================== TURN DETECTION VARIABLES ====================
-
   // Low-pass filter for smoothing lateral force
-  double _smoothedLateralForce = 0.0; // The smoothed X-axis value
-  final double _lpfAlpha = 0.15;
-
-  // Turn detection thresholds
-  final double _turnForceThreshold = 2.0; // Minimum lateral force (m/s²)turns
-  final int _turnDurationMs = 700; // Minimum duration (milliseconds)
-  final double minSpeedForTurnDetection = 10.0; // Minimum speed (km/h)
+  double _smoothedLateralForce = 0.0;
 
   // State tracking
-  DateTime? _turnStartTime; // When potential turn began
-  DateTime? _lastTurnDetection; // Last confirmed turn time
-  final Duration _turnCooldown = const Duration(seconds: 2);
+  DateTime? _turnStartTime;
+  DateTime? _lastTurnDetection;
 
   // Turn Quality
-  double? _turnEntrySpeed; // Speed when turn started
-  double _turnPeakForce = 0.0; // Max lateral force observed during turn
+  double? _turnEntrySpeed;
+  double _turnPeakForce = 0.0;
 
   // GYROSCOPE VARIABLES
-  StreamSubscription<GyroscopeEvent>? _gyroSub; // Gyroscope stream
-  double _smoothedGyroZ = 0.0; // Smoothed rotation rate
-  final double _gyroRotationThreshold = 0.5; // Min rotation (rad/s)
-  final bool _useGyroscopeFusion = true; // Enable/disable gyro
+  StreamSubscription<GyroscopeEvent>? _gyroSub;
+  double _smoothedGyroZ = 0.0;
+  final bool _useGyroscopeFusion = true;
 
   // ACCELERATION/DECELERATION DETECTION
   double? _lastDirectionX;
@@ -117,7 +155,6 @@ class VehicleMonitorService {
 
   final double magnitudeSettledThreshold = 0.5;
   final double directionReversalThreshold = 160.0;
-
 
   Future<void> startMonitoring({
     required BuildContext context,
@@ -240,7 +277,7 @@ class VehicleMonitorService {
 
       // Only check for harsh events if buffer is full AND vehicle is moving
       if (_accelBuffer.length == _acBufferSize &&
-          currentSpeedKmh > minSpeedThreshold) {
+          currentSpeedKmh > _kMinSpeedThresholdKmh) {
         // Calculate average signed acceleration
         double avgAccel =
             _accelBuffer.reduce((a, b) => a + b) / _accelBuffer.length;
@@ -258,14 +295,14 @@ class VehicleMonitorService {
         double stdDev = sqrt(variance / _accelBuffer.length);
 
         // If too much jitter/noise, skip detection
-        if (stdDev > jitterThreshold) {
+        if (stdDev > _kJitterThreshold) {
           _consecutiveHarshAccel = 0;
           _consecutiveHarshBrake = 0;
           return;
         }
 
         // Check if magnitude exceeds threshold
-        if (avgMagnitude > accelerationThreshold) {
+        if (avgMagnitude > _kAccelerationThreshold) {
           // Determine if it's acceleration or braking based on SIGN
           if (avgAccel > 0) {
             // Positive = Acceleration
@@ -341,7 +378,7 @@ class VehicleMonitorService {
         if (crashFeature == true) {
           _checkCrashFromAcceleration(context, ref, avgMagnitude);
         }
-      } else if (currentSpeedKmh <= minSpeedThreshold) {
+      } else if (currentSpeedKmh <= _kMinSpeedThresholdKmh) {
         _consecutiveHarshAccel = 0;
         _consecutiveHarshBrake = 0;
       }
@@ -364,7 +401,7 @@ class VehicleMonitorService {
       _gyroSub = gyroscopeEvents.listen((GyroscopeEvent event) {
         // Smooth the Z-axis rotation (yaw - turning left/right)
         _smoothedGyroZ =
-            (_lpfAlpha * event.z) + ((1 - _lpfAlpha) * _smoothedGyroZ);
+            (_kLpfAlpha * event.z) + ((1 - _kLpfAlpha) * _smoothedGyroZ);
       });
       print('✅ Gyroscope fusion enabled for turn detection');
     }
@@ -530,10 +567,10 @@ class VehicleMonitorService {
   void _detectTurn(double rawLateralForce) {
     // 1. Smooth the lateral force
     _smoothedLateralForce =
-        (_lpfAlpha * rawLateralForce) + ((1 - _lpfAlpha) * _smoothedLateralForce);
+        (_kLpfAlpha * rawLateralForce) + ((1 - _kLpfAlpha) * _smoothedLateralForce);
 
     // 2. Speed Check: Ignore turns if moving too slowly (e.g., parking lot maneuvers)
-    if (currentSpeedKmh < minSpeedForTurnDetection) {
+    if (currentSpeedKmh < _kMinSpeedThresholdKmh) {
       _turnStartTime = null;
       _turnEntrySpeed = null;
       _turnPeakForce = 0.0;
@@ -542,12 +579,12 @@ class VehicleMonitorService {
 
     // 3. Cooldown Check: Don't detect a new turn immediately after another
     if (_lastTurnDetection != null &&
-        DateTime.now().difference(_lastTurnDetection!) < _turnCooldown) {
+        DateTime.now().difference(_lastTurnDetection!) < _kTurnCooldown) {
       return;
     }
 
     // 4. Turn Logic
-    if (_smoothedLateralForce.abs() > _turnForceThreshold) {
+    if (_smoothedLateralForce.abs() > _kTurnForceThreshold) {
 
       // --- START OF TURN ---
       if (_turnStartTime == null) {
@@ -568,12 +605,12 @@ class VehicleMonitorService {
           DateTime.now().difference(_turnStartTime!).inMilliseconds;
 
       // --- TURN CONFIRMED ---
-      if (durationMs >= _turnDurationMs) {
+      if (durationMs >= _kTurnDurationMs) {
         bool gyroConfirmsRotation = true;
 
         // Gyroscope Validation (if enabled)
         if (_useGyroscopeFusion) {
-          gyroConfirmsRotation = _smoothedGyroZ.abs() > _gyroRotationThreshold;
+          gyroConfirmsRotation = _smoothedGyroZ.abs() > _kGyroRotationThreshold;
           if (!gyroConfirmsRotation) {
             print("⚠️ Turn rejected: Lateral force detected but no rotation");
             _turnStartTime = null;
@@ -627,7 +664,7 @@ class VehicleMonitorService {
   // HELPER METHODS
   bool _shouldSendNotification(DateTime? lastNotification) {
     if (lastNotification == null) return true;
-    return DateTime.now().difference(lastNotification) > _notificationCooldown;
+    return DateTime.now().difference(lastNotification) > _kNotificationCooldown;
   }
 
   void _checkCrashFromAcceleration(
@@ -636,7 +673,7 @@ class VehicleMonitorService {
       double avgMagnitude,
       ) {
     if (_lastCrashDetection != null &&
-        DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
+        DateTime.now().difference(_lastCrashDetection!) < _kCrashCooldown) {
       return;
     }
 
@@ -646,14 +683,14 @@ class VehicleMonitorService {
         _accelBuffer[_accelBuffer.length - 1].abs() -
             _accelBuffer[_accelBuffer.length - 2].abs();
 
-    if (accelFluctuation.abs() > 1) {
+    if (accelFluctuation.abs() > _kCrashAccelFluctuationLimit) {
       _triggerCrashDetection(context, ref);
     }
   }
 
   void _checkCrashFromSpeedDrop(BuildContext context, WidgetRef ref) {
     if (_lastCrashDetection != null &&
-        DateTime.now().difference(_lastCrashDetection!) < _crashCooldown) {
+        DateTime.now().difference(_lastCrashDetection!) < _kCrashCooldown) {
       return;
     }
 
@@ -666,7 +703,7 @@ class VehicleMonitorService {
         recent['time'].difference(previous['time']).inMilliseconds / 1000.0;
     final delSpeed = recent['speed'] - previous['speed'];
 
-    if (delSpeed < -15 && delTime < 1.5) {
+    if (delSpeed < _kCrashSpeedDropLimit && delTime < 1.5) {
       _triggerCrashDetection(context, ref);
     }
   }
@@ -838,29 +875,18 @@ class VehicleMonitorService {
     // Negative result = Speed increased (accelerating)
     double speedDrop = entrySpeed - exitSpeed;
 
-    // --- THRESHOLDS ---
-    // Smooth limit: Forces below this are generally comfortable
-    const double smoothForceLimit = 3.5; // m/s²
-
-    // Jerky limit: Forces above this feel aggressive to passengers
-    const double jerkyForceLimit = 5.5;  // m/s²
-
-    // Speed drop: Slowing down by more than 15 km/h *during* the turn usually
-    // means the driver entered too fast and panic-braked.
-    const double significantSpeedDrop = 15.0; // km/h
-
     // --- SCORING LOGIC ---
 
-    if (peakForce > jerkyForceLimit) {
+    if (peakForce > _kJerkyTurnLimit) {
       quality = "Jerky";
       reason = "High G-Force (${peakForce.toStringAsFixed(1)} m/s²)";
     }
-    else if (speedDrop > significantSpeedDrop) {
+    else if (speedDrop > _kSignificantSpeedDrop) {
       quality = "Jerky";
       reason = "Hard Braking in Turn (-${speedDrop.toStringAsFixed(1)} km/h)";
     }
     // To get "Smooth", you must have low force AND consistent speed (no hard braking)
-    else if (peakForce < smoothForceLimit && speedDrop < 10.0) {
+    else if (peakForce < _kSmoothTurnLimit && speedDrop < 10.0) {
       quality = "Smooth";
       reason = "Controlled & Steady";
     }
