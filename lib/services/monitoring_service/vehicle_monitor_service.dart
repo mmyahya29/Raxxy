@@ -30,6 +30,7 @@ class VehicleMonitorService {
 
   // Service instances
   final SessionSummaryService _sessionService = SessionSummaryService();
+  final CoachingService _coachingService = CoachingService();
 
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
   StreamSubscription<Position>? _positionSub;
@@ -282,6 +283,13 @@ class VehicleMonitorService {
                   "Woah Buddy! Easy on the Gas",
                   "Acceleration: ${avgMagnitude.toStringAsFixed(2)} m/s² at ${currentSpeedKmh.toStringAsFixed(0)} km/h",
                 );
+
+                // COACHING: Voice + Haptic Feedback for Accel
+                _coachingService.triggerFeedback(
+                    message: "Ease off the throttle.",
+                    vibrationPattern: [0, 200, 100, 200]
+                );
+
                 print(
                   "🟢 Harsh ACCELERATION detected: ${avgMagnitude.toStringAsFixed(2)} m/s²",
                 );
@@ -304,6 +312,13 @@ class VehicleMonitorService {
                   "Woah Buddy! Easy on the Brakes",
                   "Deceleration: ${avgMagnitude.toStringAsFixed(2)} m/s² at ${currentSpeedKmh.toStringAsFixed(0)} km/h",
                 );
+
+                // COACHING: Voice + Haptic Feedback for Brake
+                _coachingService.triggerFeedback(
+                    message: "Easy on the brakes.",
+                    vibrationPattern: [0, 500]
+                );
+
                 print(
                   "🔴 Harsh BRAKING detected: ${avgMagnitude.toStringAsFixed(2)} m/s²",
                 );
@@ -864,6 +879,13 @@ class VehicleMonitorService {
         sendNotification(
             "Rough Corner Detected",
             "Try braking before the turn, not during it."
+        );
+
+        // COACHING: Voice + Haptic Feedback for Turns
+        // Pattern: [0, 100, 50, 100, 50, 100] -> Rapid pulses
+        _coachingService.triggerFeedback(
+            message: "Watch your cornering.",
+            vibrationPattern: [0, 100, 50, 100, 50, 100]
         );
       }
     }
