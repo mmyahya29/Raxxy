@@ -63,6 +63,29 @@ class DriverProfileService {
     }
   }
 
+  /// NEW: Get raw session data for other services
+  static Future<List<Map<String, dynamic>>> getLastSessions({
+    required String userId,
+    int sessionCount = 10,
+  }) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final sessionsSnapshot = await firestore
+          .collection('users')
+          .doc(userId)
+          .collection('sessions')
+          .orderBy('endTime', descending: true)
+          .limit(sessionCount)
+          .get();
+
+      return sessionsSnapshot.docs.map((doc) => doc.data()).toList();
+    } catch (e) {
+      print('❌ Error fetching last sessions: $e');
+      return [];
+    }
+  }
+
+
   /// NEW: Logic to identify specific stress triggers
   static List<String> _identifyStressTriggers(
       List<Map<String, dynamic>> sessions, Map<String, double> overallMetrics) {
