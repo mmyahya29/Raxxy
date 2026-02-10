@@ -14,6 +14,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../providers/provider.dart';
 import '../../providers/safety_feature_provider.dart';
 import '../notifications_services.dart';
+import 'package:raxxy/services/monitoring_service/feedback_service.dart';
+
 
 class VehicleMonitorService {
 
@@ -87,6 +89,8 @@ class VehicleMonitorService {
   // Service instances
   final SessionSummaryService _sessionService = SessionSummaryService();
   final CoachingService _coachingService = CoachingService();
+  final FeedbackService _feedbackService = FeedbackService();
+
 
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
   StreamSubscription<Position>? _positionSub;
@@ -215,6 +219,9 @@ class VehicleMonitorService {
       print('Failed to enable wakelock: $e');
     }
 
+    // Initialize Feedback Service with history
+    await _feedbackService.initialize(userId);
+
     // Start UI update timer
     _uiUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
       if (_accelBuffer.isNotEmpty) {
@@ -322,10 +329,12 @@ class VehicleMonitorService {
                 );
 
                 // COACHING: Voice + Haptic Feedback for Accel
-                _coachingService.triggerFeedback(
-                    message: "Ease off the throttle.",
-                    vibrationPattern: [0, 200, 100, 200]
-                );
+                // DEPRECATED: Handled by FeedbackService now, but keeping for backup until verified
+                // Old direct call: _coachingService.triggerFeedback(...)
+                
+                // NEW: Use FeedbackService
+                _feedbackService.evaluateAcceleration(avgMagnitude, currentSpeedKmh);
+
 
                 print(
                   "🟢 Harsh ACCELERATION detected: ${avgMagnitude.toStringAsFixed(2)} m/s²",
@@ -351,10 +360,9 @@ class VehicleMonitorService {
                 );
 
                 // COACHING: Voice + Haptic Feedback for Brake
-                _coachingService.triggerFeedback(
-                    message: "Easy on the brakes.",
-                    vibrationPattern: [0, 500]
-                );
+                // NEW: Use FeedbackService
+                _feedbackService.evaluateBraking(avgMagnitude, currentSpeedKmh);
+
 
                 print(
                   "🔴 Harsh BRAKING detected: ${avgMagnitude.toStringAsFixed(2)} m/s²",
@@ -635,6 +643,9 @@ class VehicleMonitorService {
         double exitSpeed = currentSpeedKmh;
 
         _analyzeTurnQuality(finalEntrySpeed, exitSpeed, _turnPeakForce);
+        
+        // NEW: Real-time Feedback for Turn
+        _feedbackService.evaluateTurn(_turnPeakForce, currentSpeedKmh);
 
         // Logging
         String gyroInfo = _useGyroscopeFusion
