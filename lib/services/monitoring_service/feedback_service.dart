@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'package:raxxy/services/driver_profile_service.dart';
 import 'package:raxxy/services/notifications_services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+import '../../Models/weather_model.dart';
+import '../../providers/weather_api_provider.dart';
 
-enum FeedbackCategory { turn, throttling, braking, speeding, smoothness }
+enum FeedbackCategory { turn, throttling, braking, speeding, smoothness, weather}
 
 class DriverFeedback {
   final FeedbackCategory category;
@@ -21,6 +25,7 @@ class DriverFeedback {
 }
 
 class FeedbackService {
+
   static final FeedbackService _instance = FeedbackService._internal();
 
   factory FeedbackService() => _instance;
@@ -144,6 +149,47 @@ class FeedbackService {
   bool _canTrigger(DateTime? lastTime) {
     if (lastTime == null) return true;
     return DateTime.now().difference(lastTime) > _kFeedbackCooldown;
+  }
+
+  void evaluateWeather(WeatherBase data) async {
+    final int conditionId = data.id; // Assuming you added 'id' to your WeatherBase model
+    final String description = data.description;
+
+
+    String message = "";
+    String recommendation = "";
+    double severity = 0.5; // Default severity
+
+    // 2. Logic based on OpenWeather Condition IDs
+    // 2xx: Thunderstorm, 3xx: Drizzle, 5xx: Rain, 6xx: Snow, 7xx: Atmosphere (Fog)
+    if (conditionId >= 200 && conditionId < 300) {
+      message = "Thunderstorm detected.";
+      recommendation = "Seek cover if visibility is poor.";
+      severity = 0.9;
+    }
+    else if (conditionId >= 500 && conditionId < 600) {
+      message = "Rainy conditions detected.";
+      recommendation = "It's a rainy day, take your departure before time to account for traffic.";
+      severity = 0.6;
+    }
+    else if (conditionId == 800) {
+      // Usually, we don't alert for clear weather, but you can for high UV/Heat
+      return;
+    }
+    else if (conditionId > 800) {
+      message = "Cloudy skies.";
+      recommendation = "Visibility may vary, stay alert.";
+      severity = 0.3;
+    }
+
+    // 3. Emit the feedback if a message was set
+    _emitFeedback(
+      category: FeedbackCategory.weather, // Add 'weather' to your FeedbackCategory enum
+      severity: severity,
+      message: message,
+      recommendation: recommendation,
+      vibrationPattern: [0, 300, 100, 300], // Distinct pattern for weather
+    );
   }
 
   void _emitFeedback({
