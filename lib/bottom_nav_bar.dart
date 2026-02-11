@@ -67,21 +67,22 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
       screens: _buildScreens(),
       items: _navBarsItems(),
       confineToSafeArea: true,
+      decoration: NavBarDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xff6a11cb), Color(0xff2575fc)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff2575fc).withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       backgroundColor: Theme.of(context).appBarTheme.backgroundColor!,
       navBarStyle: NavBarStyle.style1,
-    );
-  }
-}
-
-class DummyPage extends StatelessWidget {
-  final String title;
-  const DummyPage({super.key, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(child: Text('This is the $title page')),
     );
   }
 }

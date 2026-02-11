@@ -45,10 +45,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(
-          'Settings',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22.sp),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24.sp)),
+          ],
         ),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xff6a11cb), Color(0xff2575fc)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff2575fc).withOpacity(0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+        ),
+        centerTitle: false,
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
