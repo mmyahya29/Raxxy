@@ -27,7 +27,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      // Custom AppBar for a more integrated look
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -36,16 +35,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Text('Welcome back, Driver', style: TextStyle(fontSize: 14.sp, color: Colors.grey)),
           ],
         ),
-        centerTitle: false,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () {},
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xff6a11cb), Color(0xff2575fc)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff2575fc).withOpacity(0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          SizedBox(width: 10.w),
-        ],
+        ),
+        centerTitle: false,
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),

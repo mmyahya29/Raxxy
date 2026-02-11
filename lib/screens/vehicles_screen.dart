@@ -56,7 +56,33 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
     final mileageController = TextEditingController();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('What are we Driving today?')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Manage Vehicles', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24.sp)),
+            Text('What are we driving today?', style: TextStyle(fontSize: 14.sp, color: Colors.grey)),
+          ],
+        ),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xff6a11cb), Color(0xff2575fc)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff2575fc).withOpacity(0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+        ),
+        centerTitle: false,
+      ),
       body: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20).r,
         child: Column(
