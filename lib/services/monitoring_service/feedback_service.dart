@@ -151,45 +151,69 @@ class FeedbackService {
     return DateTime.now().difference(lastTime) > _kFeedbackCooldown;
   }
 
-  void evaluateWeather(WeatherBase data) async {
-    final int conditionId = data.id; // Assuming you added 'id' to your WeatherBase model
-    final String description = data.description;
+  void evaluateWeather(WidgetRef ref) async {
+try{
+  Position position = await _determinePosition();
+  final data = await ref.read(
+      weatherProvider((lat: position.latitude, lon: position.longitude)).future
+  );
+  final int conditionId = data.current.id; // Assuming you added 'id' to your WeatherBase model
+  final String description = data.current.description;
 
 
-    String message = "";
-    String recommendation = "";
-    double severity = 0.5; // Default severity
+  String message = "";
+  String recommendation = "";
+  double severity = 0.5; // Default severity
 
-    // 2. Logic based on OpenWeather Condition IDs
-    // 2xx: Thunderstorm, 3xx: Drizzle, 5xx: Rain, 6xx: Snow, 7xx: Atmosphere (Fog)
-    if (conditionId >= 200 && conditionId < 300) {
-      message = "Thunderstorm detected.";
-      recommendation = "Seek cover if visibility is poor.";
-      severity = 0.9;
-    }
-    else if (conditionId >= 500 && conditionId < 600) {
-      message = "Rainy conditions detected.";
-      recommendation = "It's a rainy day, take your departure before time to account for traffic.";
-      severity = 0.6;
-    }
-    else if (conditionId == 800) {
-      // Usually, we don't alert for clear weather, but you can for high UV/Heat
-      return;
-    }
-    else if (conditionId > 800) {
-      message = "Cloudy skies.";
-      recommendation = "Visibility may vary, stay alert.";
-      severity = 0.3;
+  // 2. Logic based on OpenWeather Condition IDs
+  // 2xx: Thunderstorm, 3xx: Drizzle, 5xx: Rain, 6xx: Snow, 7xx: Atmosphere (Fog)
+  if (conditionId >= 200 && conditionId < 300) {
+    message = "Thunderstorm detected.";
+    recommendation = "Seek cover if visibility is poor.";
+    severity = 0.9;
+  }
+  else if (conditionId >= 500 && conditionId < 600) {
+    message = "Rainy conditions detected.";
+    recommendation = "It's a rainy day, take your departure before time to account for traffic.";
+    severity = 0.6;
+  }
+  else if (conditionId == 800) {
+    // Usually, we don't alert for clear weather, but you can for high UV/Heat
+    return;
+  }
+  else if (conditionId > 800) {
+    message = "Cloudy skies.";
+    recommendation = "Visibility may vary, stay alert.";
+    severity = 0.3;
+  }
+
+  // 3. Emit the feedback if a message was set
+  _emitFeedback(
+    category: FeedbackCategory.weather, // Add 'weather' to your FeedbackCategory enum
+    severity: severity,
+    message: message,
+    recommendation: recommendation,
+    vibrationPattern: [0, 300, 100, 300], // Distinct pattern for weather
+  );
+}
+catch (e){
+  print(e);
+}
+  }
+  Future<Position> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return Future.error('Location services are disabled.');
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return Future.error('Permissions denied');
     }
 
-    // 3. Emit the feedback if a message was set
-    _emitFeedback(
-      category: FeedbackCategory.weather, // Add 'weather' to your FeedbackCategory enum
-      severity: severity,
-      message: message,
-      recommendation: recommendation,
-      vibrationPattern: [0, 300, 100, 300], // Distinct pattern for weather
-    );
+    return await Geolocator.getCurrentPosition();
   }
 
   void _emitFeedback({
