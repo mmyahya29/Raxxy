@@ -6,45 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'weather_api_provider.dart';
 import 'package:geolocator/geolocator.dart';
 
-final syncProvider = Provider((ref) {
 
-  Future<void> performSync() async {
-    try {
-      // 1. Get Current Position
-      Position position = await _determinePosition();
-
-      // 2. Pass real lat/lon to the provider
-      final data = await ref.read(
-          weatherProvider((lat: position.latitude, lon: position.longitude)).future
-      );
-
-      // 3. Logic based on weather condition
-      _handleWeatherLogic(data.current.description);
-
-    } catch (e) {
-      print("Error during sync: $e");
-    }
-  }
-
-  return performSync; // Return the function so it can be called elsewhere
-});
-
-// Helper: Determine the current position with permission handling
-Future<Position> _determinePosition() async {
-  bool serviceEnabled;
-  LocationPermission permission;
-
-  serviceEnabled = await Geolocator.isLocationServiceEnabled();
-  if (!serviceEnabled) return Future.error('Location services are disabled.');
-
-  permission = await Geolocator.checkPermission();
-  if (permission == LocationPermission.denied) {
-    permission = await Geolocator.requestPermission();
-    if (permission == LocationPermission.denied) return Future.error('Permissions denied');
-  }
-
-  return await Geolocator.getCurrentPosition();
-}
 
 
 // 1. The Repository Provider
@@ -91,24 +53,5 @@ class WeatherRepository {
   }
 }
 
-void _handleWeatherLogic(String description) {
-  final condition = description.toLowerCase();
-
-  if (condition.contains('rain')) {
-    print("☔ Action: It is rainy. Remember to take an umbrella!");
-  }
-  else if (condition.contains('cloud')) {
-    print("☁️ Action: It is cloudy. Perfect for a walk.");
-  }
-  else if (condition.contains('clear')) {
-    print("☀️ Action: The sky is clear. Don't forget sunscreen!");
-  }
-  else if (condition.contains('snow')) {
-    print("❄️ Action: It's snowing! Drive carefully.");
-  }
-  else {
-    print("🌡️ Current weather status: $condition");
-  }
-}
 
 

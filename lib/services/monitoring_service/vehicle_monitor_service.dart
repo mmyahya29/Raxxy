@@ -209,6 +209,7 @@ class VehicleMonitorService {
 
     sendNotification("RAXXY", "Monitoring service started");
 
+
     // Check for stress triggers immediately at start
     _checkStressTriggers(userId);
 
@@ -221,6 +222,7 @@ class VehicleMonitorService {
 
     // Initialize Feedback Service with history
     await _feedbackService.initialize(userId);
+    _feedbackService.evaluateWeather(ref);
 
     // Start UI update timer
     _uiUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
