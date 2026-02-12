@@ -25,7 +25,7 @@ class VehicleMonitorService {
 
   // --- GENERAL THRESHOLDS ---
   // Minimum speed to consider the car "moving" for event detection
-  static const double _kMinSpeedThresholdKmh = 5.0; // Default: 10.0 (Lowered for testing)
+  static const double _kMinSpeedThresholdKmh = 0.0; // Default: 10.0 (Lowered for testing)
 
   // --- ACCELERATION & BRAKING ---
   // G-Force required to trigger Harsh Acceleration/Braking
@@ -108,7 +108,7 @@ class VehicleMonitorService {
   bool _isMonitoring = false;
 
   final List<double> _accelBuffer = [];
-  final int _acBufferSize = 10;
+  final int _acBufferSize = 5;    //================Buffer for smoothness===================
   final int sustainedSampleCount = 1;
 
   String? _userId;
@@ -208,6 +208,7 @@ class VehicleMonitorService {
     final crashFeature = ref.watch(featureNotifierProvider);
 
     sendNotification("RAXXY", "Monitoring service started");
+    debugPrint("RAXXY : Monitoring service started");
 
 
     // Check for stress triggers immediately at start
@@ -338,7 +339,7 @@ class VehicleMonitorService {
                 _feedbackService.evaluateAcceleration(avgMagnitude, currentSpeedKmh);
 
 
-                print(
+                debugPrint(
                   "🟢 Harsh ACCELERATION detected: ${avgMagnitude.toStringAsFixed(2)} m/s²",
                 );
                 _consecutiveHarshAccel = 0;

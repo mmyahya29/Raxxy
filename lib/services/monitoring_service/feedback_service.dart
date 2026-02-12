@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:raxxy/services/driver_profile_service.dart';
 import 'package:raxxy/services/notifications_services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -117,11 +118,18 @@ class FeedbackService {
   }
 
   void evaluateAcceleration(double magnitude, double speedKmh) {
+    _emitFeedback(
+      category: FeedbackCategory.throttling,
+      severity: (magnitude / 5.0).clamp(0.0, 1.0),
+      message: "Easy on the gas!",
+      recommendation: "Imagine an egg under your foot.",
+      vibrationPattern: [0, 200],
+    );
      if (magnitude < _avgAccel * 1.2) return;
      if (!_canTrigger(_lastAccelFeedback)) return;
 
      _lastAccelFeedback = DateTime.now();
-     
+
      _emitFeedback(
        category: FeedbackCategory.throttling,
        severity: (magnitude / 5.0).clamp(0.0, 1.0),
