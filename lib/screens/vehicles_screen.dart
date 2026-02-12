@@ -71,7 +71,6 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-
             boxShadow: [
               BoxShadow(
                 color: const Color(0xff2575fc).withOpacity(0.3),

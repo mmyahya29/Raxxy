@@ -27,7 +27,6 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
               'Maintenance',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24.sp),
             ),
-
           ],
         ),
         flexibleSpace: Container(
