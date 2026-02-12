@@ -8,6 +8,7 @@ import '../providers/provider.dart';
 import '../providers/safety_feature_provider.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/reusable_widgets.dart';
+import '../services/notifications_services.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
@@ -19,6 +20,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final emNumController = TextEditingController();
+  final CoachingService _coachingService = CoachingService();
 
   @override
   void initState() {
@@ -139,6 +141,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
 
               SizedBox(height: 30.h),
+              _sectionLabel("Voice Coach Settings"),
+
+              // --- VOICE COACH BUTTONS ---
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(24.r),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    _buildActionTile(
+                      icon: Icons.play_arrow_rounded,
+                      iconColor: Colors.green,
+                      title: "Test Voice",
+                      subtitle: "Preview selected voice",
+                      onTap: _testVoice,
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: 30.h),
               _sectionLabel("Account Management"),
 
               // --- LOGOUT BUTTON ---
@@ -239,6 +266,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ? Text(subtitle, style: TextStyle(fontSize: 12.sp, color: Colors.grey))
           : null,
       trailing: trailing,
+    );
+  }
+
+  // Helper: Action Tile (like settings tile but with onTap)
+  Widget _buildActionTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+      leading: Container(
+        padding: EdgeInsets.all(8.r),
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        child: Icon(icon, color: iconColor, size: 22.r),
+      ),
+      title: Text(title, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
+      subtitle: subtitle != null
+          ? Text(subtitle, style: TextStyle(fontSize: 12.sp, color: Colors.grey))
+          : null,
+      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+      onTap: onTap,
     );
   }
 
@@ -346,6 +400,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: const Text("Logout", style: TextStyle(color: Colors.white)),
           ),
         ],
+      ),
+    );
+  }
+
+  // --- NEW VOICE METHODS ---
+
+  // Replace the _showVoiceSelectionDialog method with this fixed version:
+
+
+  Future<void> _testVoice() async {
+    await _coachingService.testVoice();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("🎤 Testing voice..."),
+        backgroundColor: Colors.blue.shade700,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.all(20.r),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
       ),
     );
   }
