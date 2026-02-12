@@ -58,8 +58,83 @@ class CoachingService {
   DateTime? _lastFeedbackTime;
   bool _isInitialized = false; // Track initialization state
 
+  // Store the selected voice
+  Map<String, String>? _selectedVoice;
+
   // Cooldown duration to prevent spamming
   final Duration _cooldown = const Duration(seconds: 4);
+
+  /// Get list of available voices
+  Future<List<Map<String, String>>> getAvailableVoices() async {
+    try {
+      // Initialize TTS if not already done
+      if (!_isInitialized) {
+        await _initTts();
+      }
+
+      final voices = await _tts.getVoices;
+
+      if (voices != null && voices is List) {
+        // Cast to proper type
+        List<Map<String, String>> voiceList = [];
+        for (var voice in voices) {
+          if (voice is Map) {
+            voiceList.add({
+              'name': voice['name']?.toString() ?? 'Unknown',
+              'locale': voice['locale']?.toString() ?? 'Unknown',
+            });
+          }
+        }
+        debugPrint('🎤 Found ${voiceList.length} available voices');
+        return voiceList;
+      }
+
+      debugPrint('⚠️ No voices available');
+      return [];
+    } catch (e) {
+      debugPrint('❌ Error getting voices: $e');
+      return [];
+    }
+  }
+
+  /// Set the voice to use for TTS
+  Future<bool> setVoice(Map<String, String> voice) async {
+    try {
+      // Initialize TTS if not already done
+      if (!_isInitialized) {
+        await _initTts();
+      }
+
+      // Set the voice
+      await _tts.setVoice(voice);
+      _selectedVoice = voice;
+
+      debugPrint('🎤 Voice set to: ${voice['name']} (${voice['locale']})');
+      return true;
+    } catch (e) {
+      debugPrint('❌ Error setting voice: $e');
+      return false;
+    }
+  }
+
+  /// Get the currently selected voice
+  Map<String, String>? get selectedVoice => _selectedVoice;
+
+  /// Test the current voice
+  Future<void> testVoice() async {
+    try {
+      // Initialize TTS if not already done
+      if (!_isInitialized) {
+        await _initTts();
+      }
+
+      await _tts.stop();
+      await _tts.speak("Hello! This is a test of the selected voice.");
+      debugPrint('🎤 Testing voice: ${_selectedVoice?['name'] ?? 'default'}');
+    } catch (e) {
+      debugPrint('❌ Error testing voice: $e');
+    }
+  }
 
   /// Initialize TTS with proper Android configuration
   Future<void> _initTts() async {
@@ -162,7 +237,7 @@ class CoachingService {
         final remainingCooldown = _cooldown - timeSinceLastFeedback;
         debugPrint('⏳ Feedback blocked by cooldown');
         debugPrint('   ${remainingCooldown.inSeconds}s remaining');
-        debugPrint('═══════════════════════════════════════');
+        debugPrint('═══════════════════════��═══════════════');
         return;
       }
     }
