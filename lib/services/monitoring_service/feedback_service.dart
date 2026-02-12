@@ -25,6 +25,24 @@ class DriverFeedback {
   });
 }
 
+class DriverProfile {
+  final double avgHarshTurns;
+  final double avgHarshAccels;
+  final double avgHarshBrakes;
+  final int totalSessions;
+  final double avgSafetyScore;
+  final Map<FeedbackCategory, int> categoryOccurrences;
+
+  DriverProfile({
+    required this.avgHarshTurns,
+    required this.avgHarshAccels,
+    required this.avgHarshBrakes,
+    required this.totalSessions,
+    required this.avgSafetyScore,
+    required this.categoryOccurrences,
+  });
+}
+
 class FeedbackService {
 
   static final FeedbackService _instance = FeedbackService._internal();
@@ -39,25 +57,33 @@ class FeedbackService {
   Stream<DriverFeedback> get feedbackStream => _feedbackController.stream;
 
   bool _isInitialized = false;
+  String? _currentUserId;
 
   // Default thresholds
   double _avgTurnForce = 2.0;
   double _avgAccel = 2.0;
-  double _avgBrake = 2.0; // Fixed typo in variable name context
+  double _avgBrake = 2.0;
+
+  // Historical profile data
+  DriverProfile? _driverProfile;
 
   // Cooldowns
   DateTime? _lastTurnFeedback;
   DateTime? _lastAccelFeedback;
   DateTime? _lastBrakeFeedback;
+  DateTime? _lastWeatherFeedback;
   static const Duration _kFeedbackCooldown = Duration(seconds: 4);
 
   Future<void> initialize(String userId) async {
-    if (_isInitialized) return;
+    if (_isInitialized && _currentUserId == userId) return;
+
+    _currentUserId = userId;
 
     try {
       final history = await DriverProfileService.getLastSessions(userId: userId);
       if (history.isNotEmpty) {
         _calculateBenchmarks(history);
+        _buildDriverProfile(history);
       }
       _isInitialized = true;
       print('✅ FeedbackService initialized with historical benchmarks');
@@ -67,21 +93,17 @@ class FeedbackService {
   }
 
   void _calculateBenchmarks(List<Map<String, dynamic>> sessions) {
-    double totalTurnForce = 0; // Placeholder for future detailed metrics
+    double totalTurnForce = 0;
     double totalAccel = 0;
     double totalBrake = 0;
     int count = 0;
 
     for (var session in sessions) {
-      // Logic to adjust thresholds based on driver history
-      // If the driver is generally good (low harsh events), we lower the threshold 
-      // to help them maintain that "Premium" feel (gentle coaching).
-      // If the driver is aggressive, we raise it slightly so we don't spam them constantly.
       if (session['metrics'] != null) {
         final double harshRate = (session['metrics']['avgHarshEventsPerMin'] ?? 0.0).toDouble();
 
         if (harshRate > 0.5) {
-          totalAccel += 2.5; 
+          totalAccel += 2.5;
           totalBrake += 2.5;
         } else {
           totalAccel += 1.8;
@@ -94,10 +116,203 @@ class FeedbackService {
     if (count > 0) {
       _avgAccel = totalAccel / count;
       _avgBrake = totalBrake / count;
-      _avgTurnForce = 2.0; // Default for now until lateral force metrics are stored
+      _avgTurnForce = 2.0;
     }
-    
+
     print('📊 Customized Thresholds -> Accel: ${_avgAccel.toStringAsFixed(2)}, Brake: ${_avgBrake.toStringAsFixed(2)}');
+  }
+
+  void _buildDriverProfile(List<Map<String, dynamic>> sessions) {
+    double totalHarshTurns = 0;
+    double totalHarshAccels = 0;
+    double totalHarshBrakes = 0;
+    double totalSafetyScore = 0;
+    int validSessions = 0;
+
+    Map<FeedbackCategory, int> occurrences = {
+      FeedbackCategory.turn: 0,
+      FeedbackCategory.throttling: 0,
+      FeedbackCategory.braking: 0,
+      FeedbackCategory.speeding: 0,
+      FeedbackCategory.smoothness: 0,
+      FeedbackCategory.weather: 0,
+    };
+
+    for (var session in sessions) {
+      if (session['metrics'] != null) {
+        final metrics = session['metrics'];
+
+        totalHarshTurns += (metrics['harshTurns'] ?? 0).toDouble();
+        totalHarshAccels += (metrics['harshAccelerations'] ?? 0).toDouble();
+        totalHarshBrakes += (metrics['harshBrakes'] ?? 0).toDouble();
+        totalSafetyScore += (metrics['safetyScore'] ?? 0).toDouble();
+
+        validSessions++;
+      }
+    }
+
+    if (validSessions > 0) {
+      _driverProfile = DriverProfile(
+        avgHarshTurns: totalHarshTurns / validSessions,
+        avgHarshAccels: totalHarshAccels / validSessions,
+        avgHarshBrakes: totalHarshBrakes / validSessions,
+        totalSessions: validSessions,
+        avgSafetyScore: totalSafetyScore / validSessions,
+        categoryOccurrences: occurrences,
+      );
+
+      print('📈 Driver Profile Built: Avg Safety Score: ${_driverProfile!.avgSafetyScore.toStringAsFixed(1)}');
+    }
+  }
+
+  String _getPersonalizedRecommendation(FeedbackCategory category, double currentSeverity) {
+    if (_driverProfile == null) {
+      return _getDefaultRecommendation(category);
+    }
+
+    switch (category) {
+      case FeedbackCategory.turn:
+        return _getTurnRecommendation(currentSeverity);
+
+      case FeedbackCategory.throttling:
+        return _getThrottleRecommendation(currentSeverity);
+
+      case FeedbackCategory.braking:
+        return _getBrakeRecommendation(currentSeverity);
+
+      case FeedbackCategory.weather:
+        return _getWeatherRecommendation();
+
+      default:
+        return _getDefaultRecommendation(category);
+    }
+  }
+
+  String _getTurnRecommendation(double severity) {
+    final profile = _driverProfile!;
+
+    // Novice or struggling driver (high harsh turns)
+    if (profile.avgHarshTurns > 3.0) {
+      if (severity > 0.7) {
+        return "That was a very sharp turn. Try slowing down to 15-20 km/h before entering curves. Your steering will feel more controlled.";
+      } else {
+        return "Remember to slow down before the turn, not during it. This gives you better control and smoother handling.";
+      }
+    }
+
+    // Intermediate driver (moderate harsh turns)
+    else if (profile.avgHarshTurns > 1.0) {
+      if (severity > 0.7) {
+        return "A bit sharp there. You're improving, but aim to reduce speed earlier and maintain steady throttle through the turn.";
+      } else {
+        return "Good progress! Try to anticipate turns even earlier to maintain your smoothness streak.";
+      }
+    }
+
+    // Advanced driver (low harsh turns)
+    else {
+      if (severity > 0.7) {
+        return "Unusual for you! That turn was sharper than your typical smooth style. Everything okay?";
+      } else {
+        return "Just a gentle reminder: maintain that excellent cornering technique you usually demonstrate.";
+      }
+    }
+  }
+
+  String _getThrottleRecommendation(double severity) {
+    final profile = _driverProfile!;
+
+    // Aggressive accelerator
+    if (profile.avgHarshAccels > 3.0) {
+      if (severity > 0.7) {
+        return "Heavy foot detected! Accelerate gradually to 60% throttle, then increase smoothly. This also saves fuel by up to 20%.";
+      } else {
+        return "Imagine an egg under your foot. Smooth acceleration is safer and more fuel-efficient.";
+      }
+    }
+
+    // Moderate accelerator
+    else if (profile.avgHarshAccels > 1.0) {
+      if (severity > 0.7) {
+        return "That was a bit aggressive. You've been doing well lately, try to maintain that smooth acceleration pattern.";
+      } else {
+        return "You're getting better at smooth starts. Keep building that muscle memory!";
+      }
+    }
+
+    // Smooth driver
+    else {
+      if (severity > 0.7) {
+        return "That's not like you! You're usually very smooth with acceleration. Let's get back to your excellent baseline.";
+      } else {
+        return "Almost perfect! You're among the smoothest drivers. Just a tiny adjustment to maintain your premium status.";
+      }
+    }
+  }
+
+  String _getBrakeRecommendation(double severity) {
+    final profile = _driverProfile!;
+
+    // Frequent hard braker
+    if (profile.avgHarshBrakes > 3.0) {
+      if (severity > 0.7) {
+        return "Hard braking alert! Scan 12-15 seconds ahead to anticipate stops. This reduces wear on your brakes by 30%.";
+      } else {
+        return "Practice the 3-second rule: maintain distance equal to 3 seconds of travel time. This gives you more time to brake gently.";
+      }
+    }
+
+    // Occasional hard braker
+    else if (profile.avgHarshBrakes > 1.0) {
+      if (severity > 0.7) {
+        return "A bit sudden there. You've improved your braking lately, let's maintain that progress by looking further ahead.";
+      } else {
+        return "Your braking has improved significantly! Keep up the anticipation and smooth stops.";
+      }
+    }
+
+    // Excellent braker
+    else {
+      if (severity > 0.7) {
+        return "Whoa! That's unusual for someone with your smooth braking record. Stay focused and maintain your excellent habits.";
+      } else {
+        return "Your braking technique is exemplary. This minor adjustment keeps you at the top of your game.";
+      }
+    }
+  }
+
+  String _getWeatherRecommendation() {
+    final profile = _driverProfile!;
+
+    // Overall good driver
+    if (profile.avgSafetyScore > 80) {
+      return "Weather conditions detected. Given your excellent driving record, just apply your usual caution with extra time for reaction.";
+    }
+
+    // Average driver
+    else if (profile.avgSafetyScore > 60) {
+      return "Weather conditions require extra attention. Increase following distance and reduce speed by 10-15 km/h.";
+    }
+
+    // Needs improvement
+    else {
+      return "Adverse weather detected. Please drive extra carefully: reduce speed by 20%, double your following distance, and avoid sudden movements.";
+    }
+  }
+
+  String _getDefaultRecommendation(FeedbackCategory category) {
+    switch (category) {
+      case FeedbackCategory.turn:
+        return "Slow down before entering the turn.";
+      case FeedbackCategory.throttling:
+        return "Imagine an egg under your foot.";
+      case FeedbackCategory.braking:
+        return "Scan ahead to anticipate stops.";
+      case FeedbackCategory.weather:
+        return "Adjust driving to current weather conditions.";
+      default:
+        return "Drive carefully and stay focused.";
+    }
   }
 
   void evaluateTurn(double lateralForce, double speedKmh) {
@@ -106,37 +321,35 @@ class FeedbackService {
 
     _lastTurnFeedback = DateTime.now();
 
+    final severity = (lateralForce.abs() / 5.0).clamp(0.0, 1.0);
     String msg = speedKmh > 50 ? "Taking that turn a bit fast!" : "Sharp turn detected.";
-    
+    String recommendation = _getPersonalizedRecommendation(FeedbackCategory.turn, severity);
+
     _emitFeedback(
       category: FeedbackCategory.turn,
-      severity: (lateralForce.abs() / 5.0).clamp(0.0, 1.0),
+      severity: severity,
       message: msg,
-      recommendation: "Slow down before entering the turn.",
+      recommendation: recommendation,
       vibrationPattern: [0, 200, 100, 200],
     );
   }
 
   void evaluateAcceleration(double magnitude, double speedKmh) {
+    if (magnitude < _avgAccel * 1.2) return;
+    if (!_canTrigger(_lastAccelFeedback)) return;
+
+    _lastAccelFeedback = DateTime.now();
+
+    final severity = (magnitude / 5.0).clamp(0.0, 1.0);
+    String recommendation = _getPersonalizedRecommendation(FeedbackCategory.throttling, severity);
+
     _emitFeedback(
       category: FeedbackCategory.throttling,
-      severity: (magnitude / 5.0).clamp(0.0, 1.0),
+      severity: severity,
       message: "Easy on the gas!",
-      recommendation: "Imagine an egg under your foot.",
+      recommendation: recommendation,
       vibrationPattern: [0, 200],
     );
-     if (magnitude < _avgAccel * 1.2) return;
-     if (!_canTrigger(_lastAccelFeedback)) return;
-
-     _lastAccelFeedback = DateTime.now();
-
-     _emitFeedback(
-       category: FeedbackCategory.throttling,
-       severity: (magnitude / 5.0).clamp(0.0, 1.0),
-       message: "Easy on the gas!",
-       recommendation: "Imagine an egg under your foot.",
-       vibrationPattern: [0, 200],
-     );
   }
 
   void evaluateBraking(double magnitude, double speedKmh) {
@@ -145,12 +358,15 @@ class FeedbackService {
 
     _lastBrakeFeedback = DateTime.now();
 
+    final severity = (magnitude / 5.0).clamp(0.0, 1.0);
+    String recommendation = _getPersonalizedRecommendation(FeedbackCategory.braking, severity);
+
     _emitFeedback(
       category: FeedbackCategory.braking,
-      severity: (magnitude / 5.0).clamp(0.0, 1.0),
+      severity: severity,
       message: "Hard braking detected.",
-      recommendation: "Scan ahead to anticipate stops.",
-       vibrationPattern: [0, 500],
+      recommendation: recommendation,
+      vibrationPattern: [0, 500],
     );
   }
 
@@ -160,54 +376,63 @@ class FeedbackService {
   }
 
   void evaluateWeather(WidgetRef ref) async {
-try{
-  Position position = await _determinePosition();
-  final data = await ref.read(
-      weatherProvider((lat: position.latitude, lon: position.longitude)).future
-  );
-  final int conditionId = data.current.id; // Assuming you added 'id' to your WeatherBase model
-  final String description = data.current.description;
+    if (!_canTrigger(_lastWeatherFeedback)) return;
 
+    try {
+      Position position = await _determinePosition();
+      final data = await ref.read(
+          weatherProvider((lat: position.latitude, lon: position.longitude)).future
+      );
+      final int conditionId = data.current.id;
+      final String description = data.current.description;
 
-  String message = "";
-  String recommendation = "";
-  double severity = 0.5; // Default severity
+      String message = "";
+      String recommendation = "";
+      double severity = 0.5;
 
-  // 2. Logic based on OpenWeather Condition IDs
-  // 2xx: Thunderstorm, 3xx: Drizzle, 5xx: Rain, 6xx: Snow, 7xx: Atmosphere (Fog)
-  if (conditionId >= 200 && conditionId < 300) {
-    message = "Thunderstorm detected.";
-    recommendation = "Seek cover if visibility is poor.";
-    severity = 0.9;
-  }
-  else if (conditionId >= 500 && conditionId < 600) {
-    message = "Rainy conditions detected.";
-    recommendation = "It's a rainy day, take your departure before time to account for traffic.";
-    severity = 0.6;
-  }
-  else if (conditionId == 800) {
-    // Usually, we don't alert for clear weather, but you can for high UV/Heat
-    return;
-  }
-  else if (conditionId > 800) {
-    message = "Cloudy skies.";
-    recommendation = "Visibility may vary, stay alert.";
-    severity = 0.3;
+      // Logic based on OpenWeather Condition IDs
+      if (conditionId >= 200 && conditionId < 300) {
+        message = "Thunderstorm detected.";
+        severity = 0.9;
+      }
+      else if (conditionId >= 500 && conditionId < 600) {
+        message = "Rainy conditions detected.";
+        severity = 0.6;
+      }
+      else if (conditionId >= 600 && conditionId < 700) {
+        message = "Snow detected on the road.";
+        severity = 0.8;
+      }
+      else if (conditionId >= 700 && conditionId < 800) {
+        message = "Low visibility due to fog or mist.";
+        severity = 0.7;
+      }
+      else if (conditionId == 800) {
+        // Clear weather - no alert needed
+        return;
+      }
+      else if (conditionId > 800) {
+        message = "Cloudy skies detected.";
+        severity = 0.3;
+      }
+
+      _lastWeatherFeedback = DateTime.now();
+
+      recommendation = _getPersonalizedRecommendation(FeedbackCategory.weather, severity);
+
+      _emitFeedback(
+        category: FeedbackCategory.weather,
+        severity: severity,
+        message: message,
+        recommendation: recommendation,
+        vibrationPattern: [0, 300, 100, 300],
+      );
+    }
+    catch (e) {
+      print('❌ Error evaluating weather: $e');
+    }
   }
 
-  // 3. Emit the feedback if a message was set
-  _emitFeedback(
-    category: FeedbackCategory.weather, // Add 'weather' to your FeedbackCategory enum
-    severity: severity,
-    message: message,
-    recommendation: recommendation,
-    vibrationPattern: [0, 300, 100, 300], // Distinct pattern for weather
-  );
-}
-catch (e){
-  print(e);
-}
-  }
   Future<Position> _determinePosition() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -240,14 +465,14 @@ catch (e){
     );
 
     _feedbackController.add(feedback);
-    
-    // Trigger Voice & Haptics
+
+    // Trigger Voice & Haptics with personalized recommendation
     _coachingService.triggerFeedback(
-      message: message,
+      message: "$message $recommendation",
       vibrationPattern: vibrationPattern,
     );
   }
-  
+
   void dispose() {
     _feedbackController.close();
   }

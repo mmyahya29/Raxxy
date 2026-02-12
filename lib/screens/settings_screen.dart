@@ -141,31 +141,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
 
               SizedBox(height: 30.h),
-              _sectionLabel("Voice Coach Settings"),
-
-              // --- VOICE COACH BUTTONS ---
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(24.r),
-                  border: Border.all(
-                    color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    _buildActionTile(
-                      icon: Icons.play_arrow_rounded,
-                      iconColor: Colors.green,
-                      title: "Test Voice",
-                      subtitle: "Preview selected voice",
-                      onTap: _testVoice,
-                    ),
-                  ],
-                ),
-              ),
-
-              SizedBox(height: 30.h),
               _sectionLabel("Account Management"),
 
               // --- LOGOUT BUTTON ---
