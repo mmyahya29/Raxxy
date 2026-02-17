@@ -67,6 +67,12 @@ class VehicleMonitorNotifier extends StateNotifier<VehicleMonitorState> {
   void updateDistance(double distance) {
     state = state.copyWith(distance: distance);
   }
+  void updateRisk(double score, String level) {
+    state = state.copyWith(
+      riskScore: score,
+      riskLevel: level,
+    );
+  }
 
   void clear() {
     state = VehicleMonitorState();

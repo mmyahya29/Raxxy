@@ -16,16 +16,22 @@ import '../../providers/safety_feature_provider.dart';
 import '../notifications_services.dart';
 import 'package:raxxy/services/monitoring_service/feedback_service.dart';
 
-
 class VehicleMonitorService {
-
   // ==============================================================================
   // 🔧 SENSITIVITY & TESTING CONFIGURATION (CHANGE THESE FOR TESTING)
   // ==============================================================================
 
   // --- GENERAL THRESHOLDS ---
   // Minimum speed to consider the car "moving" for event detection
-  static const double _kMinSpeedThresholdKmh = 0.0; // Default: 10.0 (Lowered for testing)
+  // ==================== ACCIDENT RISK VARIABLES ====================
+  double _currentRiskScore = 0;
+  String _currentRiskLevel = "Low";
+
+  DateTime? _lastRiskAlert;
+  static const Duration _kRiskCooldown = Duration(seconds: 8);
+
+  static const double _kMinSpeedThresholdKmh =
+      0.0; // Default: 10.0 (Lowered for testing)
 
   // --- ACCELERATION & BRAKING ---
   // G-Force required to trigger Harsh Acceleration/Braking
@@ -38,9 +44,11 @@ class VehicleMonitorService {
 
   // --- TURNING SENSITIVITY ---
   // Lateral force (m/s²) required to detect a turn
-  static const double _kTurnForceThreshold = 1.5; // Default: 2.0 (Lowered for sensitivity)
+  static const double _kTurnForceThreshold =
+      1.5; // Default: 2.0 (Lowered for sensitivity)
   // How long (ms) a lateral force must exist to be a "turn" and not a lane change
-  static const int _kTurnDurationMs = 500; // Default: 700 (Shortened for easier detection)
+  static const int _kTurnDurationMs =
+      500; // Default: 700 (Shortened for easier detection)
   // Smoothing factor for lateral force (0.0 = infinite smoothing, 1.0 = raw data)
   static const double _kLpfAlpha = 0.15;
 
@@ -51,20 +59,25 @@ class VehicleMonitorService {
   // --- TURN QUALITY SCORING ---
   // Below this lateral force, a turn is "Smooth"
   static const double _kSmoothTurnLimit = 3.0;
+
   // Above this lateral force, a turn is "Jerky"
   static const double _kJerkyTurnLimit = 5.0;
+
   // If speed drops by this much (km/h) during a turn, it's "Jerky"
   static const double _kSignificantSpeedDrop = 12.0;
 
   // --- CRASH DETECTION ---
   // Immediate change in acceleration (jerk) to suspect a crash
   static const double _kCrashAccelFluctuationLimit = 1.0;
+
   // Speed drop (km/h) within 1.5 seconds to suspect a crash
   static const double _kCrashSpeedDropLimit = -15.0;
 
   // --- COOLDOWN TIMERS (Hardcoded for crucial testing flow) ---
   // Time between Harsh Event Notifications
-  static const Duration _kNotificationCooldown = Duration(seconds: 3); // Default: 5s
+  static const Duration _kNotificationCooldown = Duration(
+    seconds: 3,
+  ); // Default: 5s
   // Time between detecting separate Turns
   static const Duration _kTurnCooldown = Duration(seconds: 1); // Default: 2s
   // Time between Crash triggers
@@ -80,7 +93,7 @@ class VehicleMonitorService {
   final ValueNotifier<double> currentDistanceNotifier = ValueNotifier(0.0);
 
   static final VehicleMonitorService _instance =
-  VehicleMonitorService._internal();
+      VehicleMonitorService._internal();
 
   factory VehicleMonitorService() => _instance;
 
@@ -90,7 +103,6 @@ class VehicleMonitorService {
   final SessionSummaryService _sessionService = SessionSummaryService();
   final CoachingService _coachingService = CoachingService();
   final FeedbackService _feedbackService = FeedbackService();
-
 
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
   StreamSubscription<Position>? _positionSub;
@@ -108,7 +120,8 @@ class VehicleMonitorService {
   bool _isMonitoring = false;
 
   final List<double> _accelBuffer = [];
-  final int _acBufferSize = 5;    //================Buffer for smoothness===================
+  final int _acBufferSize =
+      5; //================Buffer for smoothness===================
   final int sustainedSampleCount = 1;
 
   String? _userId;
@@ -210,7 +223,6 @@ class VehicleMonitorService {
     sendNotification("RAXXY", "Monitoring service started");
     debugPrint("RAXXY : Monitoring service started");
 
-
     // Check for stress triggers immediately at start
     _checkStressTriggers(userId);
 
@@ -247,8 +259,8 @@ class VehicleMonitorService {
           // If in low speed for ~5 minutes (600 * 0.5s = 300s)
           if (_lowSpeedCounter > 600) {
             _triggerPreventativeAlert(
-                "Traffic Detected",
-                "We know heavy traffic stresses you out. Stay cool!"
+              "Traffic Detected",
+              "We know heavy traffic stresses you out. Stay cool!",
             );
             _lowSpeedCounter = -600; // Reset with delay to avoid spam
           }
@@ -334,10 +346,12 @@ class VehicleMonitorService {
                 // COACHING: Voice + Haptic Feedback for Accel
                 // DEPRECATED: Handled by FeedbackService now, but keeping for backup until verified
                 // Old direct call: _coachingService.triggerFeedback(...)
-                
-                // NEW: Use FeedbackService
-                _feedbackService.evaluateAcceleration(avgMagnitude, currentSpeedKmh);
 
+                // NEW: Use FeedbackService
+                _feedbackService.evaluateAcceleration(
+                  avgMagnitude,
+                  currentSpeedKmh,
+                );
 
                 debugPrint(
                   "🟢 Harsh ACCELERATION detected: ${avgMagnitude.toStringAsFixed(2)} m/s²",
@@ -365,7 +379,6 @@ class VehicleMonitorService {
                 // COACHING: Voice + Haptic Feedback for Brake
                 // NEW: Use FeedbackService
                 _feedbackService.evaluateBraking(avgMagnitude, currentSpeedKmh);
-
 
                 print(
                   "🔴 Harsh BRAKING detected: ${avgMagnitude.toStringAsFixed(2)} m/s²",
@@ -450,6 +463,8 @@ class VehicleMonitorService {
       _lastPosition = position;
     });
 
+    _calculateAccidentRisk(ref);
+
     print('✅ Monitoring started with enhanced analytics');
   }
 
@@ -470,25 +485,27 @@ class VehicleMonitorService {
       final hour = now.hour;
 
       // 2. Check Time-based Triggers
-      if (triggers.contains('Morning Rush (6-10 AM)') && hour >= 6 && hour < 10) {
+      if (triggers.contains('Morning Rush (6-10 AM)') &&
+          hour >= 6 &&
+          hour < 10) {
         _triggerPreventativeAlert(
-            "Morning Rush Detected",
-            "You tend to be more rushed at this time. Take a deep breath and drive smoothly."
+          "Morning Rush Detected",
+          "You tend to be more rushed at this time. Take a deep breath and drive smoothly.",
+        );
+      } else if (triggers.contains('Evening Traffic (4-10 PM)') &&
+          hour >= 16 &&
+          hour < 22) {
+        _triggerPreventativeAlert(
+          "Evening Rush Detected",
+          "Traffic might be heavy. Patience is your best fuel saver right now.",
+        );
+      } else if (triggers.contains('Late Night Driving') &&
+          (hour >= 22 || hour < 5)) {
+        _triggerPreventativeAlert(
+          "Late Night Drive",
+          "Visibility is lower. Keep your speed steady and eyes scanning.",
         );
       }
-      else if (triggers.contains('Evening Traffic (4-10 PM)') && hour >= 16 && hour < 22) {
-        _triggerPreventativeAlert(
-            "Evening Rush Detected",
-            "Traffic might be heavy. Patience is your best fuel saver right now."
-        );
-      }
-      else if (triggers.contains('Late Night Driving') && (hour >= 22 || hour < 5)) {
-        _triggerPreventativeAlert(
-            "Late Night Drive",
-            "Visibility is lower. Keep your speed steady and eyes scanning."
-        );
-      }
-
     } catch (e) {
       print('Failed to check stress triggers: $e');
     }
@@ -509,11 +526,11 @@ class VehicleMonitorService {
   // ==================== DIRECTION REVERSAL DETECTION ====================
 
   void _detectDirectionReversal(
-      double currentX,
-      double currentY,
-      double currentZ,
-      double magnitude,
-      ) {
+    double currentX,
+    double currentY,
+    double currentZ,
+    double magnitude,
+  ) {
     if (_lastDirectionX == null ||
         _lastDirectionY == null ||
         _lastDirectionZ == null) {
@@ -533,8 +550,8 @@ class VehicleMonitorService {
 
     double dotProduct =
         (_lastDirectionX! * currentX) +
-            (_lastDirectionY! * currentY) +
-            (_lastDirectionZ! * currentZ);
+        (_lastDirectionY! * currentY) +
+        (_lastDirectionZ! * currentZ);
 
     double lastMagnitude = sqrt(
       _lastDirectionX! * _lastDirectionX! +
@@ -578,7 +595,8 @@ class VehicleMonitorService {
   void _detectTurn(double rawLateralForce) {
     // 1. Smooth the lateral force
     _smoothedLateralForce =
-        (_kLpfAlpha * rawLateralForce) + ((1 - _kLpfAlpha) * _smoothedLateralForce);
+        (_kLpfAlpha * rawLateralForce) +
+        ((1 - _kLpfAlpha) * _smoothedLateralForce);
 
     // 2. Speed Check: Ignore turns if moving too slowly (e.g., parking lot maneuvers)
     if (currentSpeedKmh < _kMinSpeedThresholdKmh) {
@@ -596,11 +614,10 @@ class VehicleMonitorService {
 
     // 4. Turn Logic
     if (_smoothedLateralForce.abs() > _kTurnForceThreshold) {
-
       // --- START OF TURN ---
       if (_turnStartTime == null) {
         _turnStartTime = DateTime.now();
-        _turnEntrySpeed = currentSpeedKmh;            // Capture Entry Speed
+        _turnEntrySpeed = currentSpeedKmh; // Capture Entry Speed
         _turnPeakForce = _smoothedLateralForce.abs(); // Initialize Peak Force
       }
       // --- DURING TURN ---
@@ -646,20 +663,23 @@ class VehicleMonitorService {
         double exitSpeed = currentSpeedKmh;
 
         _analyzeTurnQuality(finalEntrySpeed, exitSpeed, _turnPeakForce);
-        
+
         // NEW: Real-time Feedback for Turn
         _feedbackService.evaluateTurn(_turnPeakForce, currentSpeedKmh);
 
         // Logging
-        String gyroInfo = _useGyroscopeFusion
-            ? "Gyro: ${_smoothedGyroZ.abs().toStringAsFixed(3)} rad/s"
-            : "Gyro: disabled";
+        String gyroInfo =
+            _useGyroscopeFusion
+                ? "Gyro: ${_smoothedGyroZ.abs().toStringAsFixed(3)} rad/s"
+                : "Gyro: disabled";
 
-        print("🔄 Turn Detected: $direction turn\n"
-            "   Peak Force: ${_turnPeakForce.toStringAsFixed(2)} m/s²\n"
-            "   $gyroInfo\n"
-            "   Duration: ${durationMs}ms\n"
-            "   Speed: ${currentSpeedKmh.toStringAsFixed(0)} km/h");
+        print(
+          "🔄 Turn Detected: $direction turn\n"
+          "   Peak Force: ${_turnPeakForce.toStringAsFixed(2)} m/s²\n"
+          "   $gyroInfo\n"
+          "   Duration: ${durationMs}ms\n"
+          "   Speed: ${currentSpeedKmh.toStringAsFixed(0)} km/h",
+        );
 
         // Reset state
         _lastTurnDetection = DateTime.now();
@@ -682,10 +702,10 @@ class VehicleMonitorService {
   }
 
   void _checkCrashFromAcceleration(
-      BuildContext context,
-      WidgetRef ref,
-      double avgMagnitude,
-      ) {
+    BuildContext context,
+    WidgetRef ref,
+    double avgMagnitude,
+  ) {
     if (_lastCrashDetection != null &&
         DateTime.now().difference(_lastCrashDetection!) < _kCrashCooldown) {
       return;
@@ -695,7 +715,7 @@ class VehicleMonitorService {
 
     double accelFluctuation =
         _accelBuffer[_accelBuffer.length - 1].abs() -
-            _accelBuffer[_accelBuffer.length - 2].abs();
+        _accelBuffer[_accelBuffer.length - 2].abs();
 
     if (accelFluctuation.abs() > _kCrashAccelFluctuationLimit) {
       _triggerCrashDetection(context, ref);
@@ -880,7 +900,11 @@ class VehicleMonitorService {
     print('Monitoring stopped');
   }
 
-  void _analyzeTurnQuality(double entrySpeed, double exitSpeed, double peakForce) {
+  void _analyzeTurnQuality(
+    double entrySpeed,
+    double exitSpeed,
+    double peakForce,
+  ) {
     String quality = "Normal";
     String reason = "";
 
@@ -894,8 +918,7 @@ class VehicleMonitorService {
     if (peakForce > _kJerkyTurnLimit) {
       quality = "Jerky";
       reason = "High G-Force (${peakForce.toStringAsFixed(1)} m/s²)";
-    }
-    else if (speedDrop > _kSignificantSpeedDrop) {
+    } else if (speedDrop > _kSignificantSpeedDrop) {
       quality = "Jerky";
       reason = "Hard Braking in Turn (-${speedDrop.toStringAsFixed(1)} km/h)";
     }
@@ -910,24 +933,80 @@ class VehicleMonitorService {
     // Record to session service (Ensure you added recordTurnQuality to SessionSummaryService)
     _sessionService.recordTurnQuality(quality);
 
-    print("🏁 Turn Quality: $quality | $reason | Entry: ${entrySpeed.toStringAsFixed(1)} -> Exit: ${exitSpeed.toStringAsFixed(1)}");
+    print(
+      "🏁 Turn Quality: $quality | $reason | Entry: ${entrySpeed.toStringAsFixed(1)} -> Exit: ${exitSpeed.toStringAsFixed(1)}",
+    );
 
     // Optional: Trigger a notification for bad turns if not in cooldown
     if (quality == "Jerky") {
       // Re-using your existing notification cooldown logic
-      if (_shouldSendNotification(_lastHarshAccelNotification)) { // piggybacking on harsh accel timer or create a new one
+      if (_shouldSendNotification(_lastHarshAccelNotification)) {
+        // piggybacking on harsh accel timer or create a new one
         sendNotification(
-            "Rough Corner Detected",
-            "Try braking before the turn, not during it."
+          "Rough Corner Detected",
+          "Try braking before the turn, not during it.",
         );
 
         // COACHING: Voice + Haptic Feedback for Turns
         // Pattern: [0, 100, 50, 100, 50, 100] -> Rapid pulses
         _coachingService.triggerFeedback(
-            message: "Watch your cornering.",
-            vibrationPattern: [0, 100, 50, 100, 50, 100]
+          message: "Watch your cornering.",
+          vibrationPattern: [0, 100, 50, 100, 50, 100],
         );
       }
+    }
+  }
+
+  void _calculateAccidentRisk(WidgetRef ref) {
+    double risk = 0;
+
+    // Overspeed Risk
+    if (currentSpeedKmh > 80) {
+      risk += 25;
+    }
+
+    // Frequent Harsh Events Risk
+    if (_sessionService.harshAccelEvents > 2) {
+      risk += 20;
+    }
+
+    if (_sessionService.harshBrakeEvents > 2) {
+      risk += 20;
+    }
+
+    // Night Driving Risk
+    int hour = DateTime.now().hour;
+    if (hour >= 22 || hour < 5) {
+      risk += 10;
+    }
+
+    // Turning aggressively
+    if (_turnPeakForce > 4.5) {
+      risk += 15;
+    }
+
+    _currentRiskScore = risk;
+
+    if (risk <= 30) {
+      _currentRiskLevel = "Low";
+    } else if (risk <= 60) {
+      _currentRiskLevel = "Medium";
+    } else {
+      _currentRiskLevel = "High";
+    }
+
+    // Send to provider
+    ref
+        .read(vehicleMonitorProvider.notifier)
+        .updateRisk(_currentRiskScore, _currentRiskLevel);
+
+    if (_lastRiskAlert == null ||
+        DateTime.now().difference(_lastRiskAlert!) > _kRiskCooldown) {
+      _feedbackService.evaluateAccidentRisk(
+        _currentRiskLevel,
+        _currentRiskScore,
+      );
+      _lastRiskAlert = DateTime.now();
     }
   }
 }

@@ -90,7 +90,7 @@ class CoachingService {
 
       // Basic TTS configuration
       await _tts.setLanguage("en-US");
-      await _tts.setSpeechRate(0.6); // Natural speaking speed
+      await _tts.setSpeechRate(0.5); // Natural speaking speed
       await _tts.setVolume(3.0); // Max volume
       await _tts.setPitch(1.0); // Normal pitch
       // await _tts.setVoice({"name": "en-us-x-iol-local", "locale": "en-US"});
