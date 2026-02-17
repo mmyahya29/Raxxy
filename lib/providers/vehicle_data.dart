@@ -5,6 +5,8 @@ class VehicleMonitorState {
   final double speed;
   final double acceleration;
   final double distance;
+  final double riskScore;
+  final String riskLevel;
 
   final List<double> speedHistory;
   final List<double> accelerationHistory;
@@ -16,6 +18,8 @@ class VehicleMonitorState {
     this.speed = 0.0,
     this.acceleration = 0.0,
     this.distance = 0.0,
+    this.riskScore = 0,
+    this.riskLevel = "Low",
     this.speedHistory = const [],
     this.accelerationHistory = const [],
   });
@@ -27,6 +31,8 @@ class VehicleMonitorState {
     double? speed,
     double? acceleration,
     double? distance,
+    double? riskScore,
+    String? riskLevel,
     List<double>? speedHistory,
     List<double>? accelerationHistory,
   }) {
@@ -37,6 +43,8 @@ class VehicleMonitorState {
       speed: speed ?? this.speed,
       acceleration: acceleration ?? this.acceleration,
       distance: distance ?? this.distance,
+      riskScore: riskScore ?? this.riskScore,   // ADD
+      riskLevel: riskLevel ?? this.riskLevel,
       speedHistory: speedHistory ?? this.speedHistory,
       accelerationHistory: accelerationHistory ?? this.accelerationHistory,
     );

@@ -5,6 +5,7 @@ import 'package:raxxy/services/notifications_services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../Models/weather_model.dart';
+import '../../providers/provider.dart';
 import '../../providers/weather_api_provider.dart';
 
 enum FeedbackCategory { turn, throttling, braking, speeding, smoothness, weather}
@@ -432,6 +433,24 @@ class FeedbackService {
       print('❌ Error evaluating weather: $e');
     }
   }
+
+  void evaluateAccidentRisk(String currentRiskLevel, double currentRiskScore) async {
+    String? message;
+    String? recommendation;
+
+    if (currentRiskLevel == "High") {
+      message = "High Risk";
+      recommendation = "Try to lower the speed to reduce risk";
+      _emitFeedback(
+        category: FeedbackCategory.weather,
+        severity: 0.7,
+        message: message,
+        recommendation: recommendation,
+        vibrationPattern: [0, 300, 100, 300],
+      );
+    }
+  }
+
 
   Future<Position> _determinePosition() async {
     bool serviceEnabled;
