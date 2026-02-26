@@ -20,6 +20,22 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile Management'),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xff6a11cb), Color(0xff2575fc)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff2575fc).withOpacity(0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+        ),
       ),
       body: Padding(
         padding: EdgeInsets.symmetric(horizontal: 20, vertical: 0).r,
@@ -138,7 +154,8 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
                         style: TextStyle(
                           fontSize: 20.sp,
                           fontWeight: FontWeight.w700,
-                        ),),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -146,8 +163,7 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
             ],
           ),
         ),
-      ),
-
+      )
     );
   }
 

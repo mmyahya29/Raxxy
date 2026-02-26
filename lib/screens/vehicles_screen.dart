@@ -624,31 +624,30 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
               ),
             ),
             SizedBox(height: 10.h),
-            Container(
-              height: 50.h,
-              width: MediaQuery.of(context).size.width - 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20.r),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 4,
-                    spreadRadius: 3,
+            InkWell(
+              onTap: (){
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddVehicleScreen()),
+                );
+              },
+              child: Container(
+                height: 50.h,
+                width: MediaQuery.of(context).size.width - 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20.r),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xff6a11cb), Color(0xff2575fc)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ],
-              ),
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AddVehicleScreen()),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20.0),
-                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff2575fc).withOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
