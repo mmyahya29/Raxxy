@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:raxxy/providers/vehicle_provider.dart';
 import 'package:raxxy/screens/dashboard_screen.dart';
 import '../../providers/provider.dart';
+import 'live_dashboard.dart';
 
 Widget monitorWidget(BuildContext context, DashboardScreen widget) {
   return Consumer(
@@ -60,16 +61,59 @@ Widget monitorWidget(BuildContext context, DashboardScreen widget) {
         ),
         child: Column(
           children: [
-            // Top Telemetry Card
-            _buildCurrentMonitor(context, monitor, widget),
 
+            // Add "Full View" button to navigate to live driving screen
             Padding(
-              padding: EdgeInsets.symmetric(vertical: 15.h),
-              child: Text(
-                'Live Performance Metrics',
-                style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+              padding: EdgeInsets.all(10.r),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LiveDrivingScreen(),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xff6a11cb), Color(0xff2575fc)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20.r),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xff2575fc).withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.dashboard_customize_rounded,
+                        color: Colors.white,
+                        size: 18.r,
+                      ),
+                      SizedBox(width: 6.w),
+                      Text(
+                        'Full View',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
+            // Top Telemetry Card
+            _buildCurrentMonitor(context, monitor, widget),
 
             // Graph Section
             Container(
@@ -98,7 +142,15 @@ Widget _buildCurrentMonitor(BuildContext context, dynamic monitor, DashboardScre
   if (monitor.riskLevel == "High") riskColor = const Color(0xffF44336);
 
   return InkWell(
-    onTap: () => widget.controller.jumpToTab(2),
+    onTap: () {
+      // Navigate to live driving screen on tap
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const LiveDrivingScreen(),
+        ),
+      );
+    },
     child: Container(
       padding: EdgeInsets.all(20.r),
       decoration: BoxDecoration(
@@ -118,9 +170,24 @@ Widget _buildCurrentMonitor(BuildContext context, dynamic monitor, DashboardScre
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${monitor.make ?? "Vehicle"} ${monitor.model ?? ""}'.toUpperCase(),
-                  style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.blueAccent),
+                Row(
+                  children: [
+                    Text(
+                      '${monitor.make ?? "Vehicle"} ${monitor.model ?? ""}'.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 18.sp,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.blueAccent,
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    // Add a small indicator that this is tappable
+                    Icon(
+                      Icons.open_in_full_rounded,
+                      size: 16.r,
+                      color: Colors.blueAccent.withOpacity(0.6),
+                    ),
+                  ],
                 ),
                 SizedBox(height: 12.h),
                 _telemetryRow(Icons.speed_rounded, "Speed", "${monitor.speed.toStringAsFixed(1)} km/h"),
@@ -132,7 +199,7 @@ Widget _buildCurrentMonitor(BuildContext context, dynamic monitor, DashboardScre
 
           // Risk Indicator
           Expanded(
-            flex: 2,
+            flex: 1,
             child: Container(
               padding: EdgeInsets.all(12.r),
               decoration: BoxDecoration(
