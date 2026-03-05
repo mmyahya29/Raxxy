@@ -10,6 +10,19 @@ class MaintenanceService {
     final double mileage = (vehicle["mileage"] as num).toDouble();
     final String vehicleType = vehicle["type"];
 
+    // Helper function to safely get field value with fallback
+    double _getFieldValue(String fieldName, double fallback) {
+      try {
+        final data = vehicle.data();
+        if (data.containsKey(fieldName)) {
+          return (data[fieldName] as num?)?.toDouble() ?? fallback;
+        }
+        return fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
     // ===================== EXISTING CHECKS =====================
 
     // 1. Oil Change - CRITICAL
@@ -76,7 +89,7 @@ class MaintenanceService {
 
     // 4. Air Filter Replacement
     gap = vehicleType == "Car" ? 15000.0 : 8000.0;
-    double airFilterAge = (vehicle["airFilterAge"] as num?)?.toDouble() ?? engineOil;
+    double airFilterAge = _getFieldValue("airFilterAge", engineOil);
     nextDue = airFilterAge + gap;
     remaining = nextDue - mileage;
 
@@ -98,7 +111,7 @@ class MaintenanceService {
     // 5. Transmission Fluid (Cars only)
     if (vehicleType == "Car") {
       gap = 50000.0;
-      double transmissionFluidAge = (vehicle["transmissionFluidAge"] as num?)?.toDouble() ?? 0.0;
+      double transmissionFluidAge = _getFieldValue("transmissionFluidAge", 0.0);
       nextDue = transmissionFluidAge + gap;
       remaining = nextDue - mileage;
 
@@ -120,7 +133,7 @@ class MaintenanceService {
 
     // 6. Coolant/Antifreeze Flush
     gap = vehicleType == "Car" ? 40000.0 : 20000.0;
-    double coolantAge = (vehicle["coolantAge"] as num?)?.toDouble() ?? 0.0;
+    double coolantAge = _getFieldValue("coolantAge", 0.0);
     nextDue = coolantAge + gap;
     remaining = nextDue - mileage;
 
@@ -141,7 +154,7 @@ class MaintenanceService {
 
     // 7. Spark Plugs Replacement
     gap = vehicleType == "Car" ? 30000.0 : 15000.0;
-    double sparkPlugsAge = (vehicle["sparkPlugsAge"] as num?)?.toDouble() ?? 0.0;
+    double sparkPlugsAge = _getFieldValue("sparkPlugsAge", 0.0);
     nextDue = sparkPlugsAge + gap;
     remaining = nextDue - mileage;
 
@@ -162,7 +175,7 @@ class MaintenanceService {
 
     // 8. Battery Check
     gap = vehicleType == "Car" ? 30000.0 : 20000.0;
-    double batteryAge = (vehicle["batteryAge"] as num?)?.toDouble() ?? 0.0;
+    double batteryAge = _getFieldValue("batteryAge", 0.0);
     nextDue = batteryAge + gap;
     remaining = nextDue - mileage;
 
@@ -183,7 +196,7 @@ class MaintenanceService {
 
     // 9. Brake Fluid Change
     gap = vehicleType == "Car" ? 20000.0 : 12000.0;
-    double brakeFluidAge = (vehicle["brakeFluidAge"] as num?)?.toDouble() ?? brakesAge;
+    double brakeFluidAge = _getFieldValue("brakeFluidAge", brakesAge);
     nextDue = brakeFluidAge + gap;
     remaining = nextDue - mileage;
 
@@ -205,7 +218,7 @@ class MaintenanceService {
     // 10. Timing Belt/Chain (Cars only) - CRITICAL
     if (vehicleType == "Car") {
       gap = 100000.0;
-      double timingBeltAge = (vehicle["timingBeltAge"] as num?)?.toDouble() ?? 0.0;
+      double timingBeltAge = _getFieldValue("timingBeltAge", 0.0);
       nextDue = timingBeltAge + gap;
       remaining = nextDue - mileage;
 
@@ -228,7 +241,7 @@ class MaintenanceService {
     // 11. Chain/Sprocket Maintenance (Bikes only)
     if (vehicleType == "Bike") {
       gap = 5000.0;
-      double chainAge = (vehicle["chainAge"] as num?)?.toDouble() ?? 0.0;
+      double chainAge = _getFieldValue("chainAge", 0.0);
       nextDue = chainAge + gap;
       remaining = nextDue - mileage;
 
@@ -251,7 +264,7 @@ class MaintenanceService {
     // 12. Wheel Alignment (Cars only)
     if (vehicleType == "Car") {
       gap = 20000.0;
-      double alignmentAge = (vehicle["alignmentAge"] as num?)?.toDouble() ?? tyresAge;
+      double alignmentAge = _getFieldValue("alignmentAge", tyresAge);
       nextDue = alignmentAge + gap;
       remaining = nextDue - mileage;
 
@@ -273,7 +286,7 @@ class MaintenanceService {
 
     // 13. Suspension Check
     gap = vehicleType == "Car" ? 30000.0 : 20000.0;
-    double suspensionAge = (vehicle["suspensionAge"] as num?)?.toDouble() ?? 0.0;
+    double suspensionAge = _getFieldValue("suspensionAge", 0.0);
     nextDue = suspensionAge + gap;
     remaining = nextDue - mileage;
 
