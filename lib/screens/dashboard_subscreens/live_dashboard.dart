@@ -16,59 +16,40 @@ class LiveDrivingScreen extends ConsumerStatefulWidget {
 
 class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
     with TickerProviderStateMixin {
-  late AnimationController _gaugeAnimationController;
-  late AnimationController _gForceAnimationController;
   late AnimationController _pulseController;
-  late AnimationController _turnController;
+  late AnimationController _radarController;
 
   String _currentTurnDirection = "none";
 
   @override
   void initState() {
     super.initState();
-
-    // Hide system UI for full immersion
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-
-    _gaugeAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
-
-    _gForceAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
 
     _pulseController = AnimationController(
       vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    )..repeat(reverse: true);
+
+    _radarController = AnimationController(
+      vsync: this,
       duration: const Duration(milliseconds: 2000),
     )..repeat();
-
-    _turnController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
   }
 
   @override
   void dispose() {
-    // Restore system UI
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
-
-    _gaugeAnimationController.dispose();
-    _gForceAnimationController.dispose();
     _pulseController.dispose();
-    _turnController.dispose();
+    _radarController.dispose();
     super.dispose();
   }
 
   Color _getHeatColor(double value, double maxValue) {
     double ratio = (value / maxValue).clamp(0.0, 1.0);
-
     if (ratio < 0.3) {
       return Color.lerp(const Color(0xFF00E5FF), const Color(0xFF2196F3), ratio / 0.3)!;
     } else if (ratio < 0.6) {
@@ -82,7 +63,6 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
 
   String _getRiskLevel(double speed, double gForce, double acceleration) {
     double riskScore = 0;
-
     if (speed > 120) riskScore += 30;
     else if (speed > 80) riskScore += 15;
 
@@ -99,32 +79,23 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
 
   Color _getRiskColor(String risk) {
     switch (risk) {
-      case "High":
-        return const Color(0xFFFF5252);
-      case "Medium":
-        return const Color(0xFFFF9800);
-      default:
-        return const Color(0xFF4CAF50);
+      case "High": return const Color(0xFFFF5252);
+      case "Medium": return const Color(0xFFFF9800);
+      default: return const Color(0xFF4CAF50);
     }
   }
 
   void _detectTurn(double lateralX) {
     const double turnThreshold = 2.5;
-
     if (lateralX.abs() > turnThreshold) {
       String newDirection = lateralX > 0 ? "right" : "left";
-
       if (_currentTurnDirection != newDirection) {
-        setState(() {
-          _currentTurnDirection = newDirection;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _currentTurnDirection = newDirection);
         });
-        _turnController.forward(from: 0);
-
         Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            setState(() {
-              _currentTurnDirection = "none";
-            });
+          if (mounted && _currentTurnDirection == newDirection) {
+            setState(() => _currentTurnDirection = "none");
           }
         });
       }
@@ -149,67 +120,94 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
     String riskLevel = _getRiskLevel(currentSpeed, gForce, currentAcceleration);
     String vehicleName = monitorState.make != null && monitorState.model != null
         ? "${monitorState.make} ${monitorState.model}"
-        : "RAXXY";
+        : "RAXXY SYSTEM";
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFF1A1F3A),
       body: Stack(
         children: [
-          CustomPaint(
-            size: Size(
-              MediaQuery.of(context).size.width,
-              MediaQuery.of(context).size.height,
+          // Animated Background
+          Positioned.fill(
+            child: CustomPaint(
+              painter: GridBackgroundPainter(animation: _pulseController),
             ),
-            painter: GridBackgroundPainter(animation: _pulseController),
           ),
+
           SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        children: [
-                          _buildTopBar(context),
-                          SizedBox(height: 15.h),
-                          _buildSpeedGauge(currentSpeed),
-                          SizedBox(height: 8.h),
-                          Text(
-                            vehicleName.toUpperCase(),
-                            style: TextStyle(
-                              color: const Color(0xFF8B7CFF),
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2,
+            child: Column(
+              children: [
+                _buildTopBar(context),
+                SizedBox(height: 10.h),
+
+                // Vehicle Name
+                Text(
+                  vehicleName.toUpperCase(),
+                  style: TextStyle(
+                    color: const Color(0xFF8B7CFF),
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 4,
+                  ),
+                ),
+                SizedBox(height: 20.h),
+
+                // Main Speedometer Area (Flexible to take up center space)
+                Expanded(
+                  flex: 5,
+                  child: Center(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        _buildSmoothSpeedometer(currentSpeed),
+
+                        // Floating Turn Indicator (Centered inside or above gauge)
+                        Positioned(
+                          top: 0,
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 400),
+                            transitionBuilder: (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: ScaleTransition(scale: animation, child: child),
                             ),
+                            child: _currentTurnDirection != "none"
+                                ? _buildTurnIndicator(_currentTurnDirection)
+                                : const SizedBox.shrink(),
                           ),
-                          SizedBox(height: 10.h),
-                          if (currentSpeed > 100 || gForce.abs() > 1.5)
-                            _buildWarningBanner("Check Tire Pressure"),
-                          if (_currentTurnDirection != "none")
-                            _buildTurnIndicator(_currentTurnDirection),
-                          const Spacer(),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 20.w),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _buildAccelerationGauge(currentAcceleration),
-                                _buildGForceRadar(gForce, lateralX, lateralY),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: 15.h),
-                          _buildRiskIndicator(riskLevel),
-                          SizedBox(height: 20.h),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
+                ),
+
+                // Warning Banner area (takes up space only when needed)
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: (currentSpeed > 100 || gForce.abs() > 1.5)
+                      ? _buildWarningBanner("Check Tire Pressure")
+                      : const SizedBox.shrink(),
+                ),
+
+                // Bottom Metrics Area
+                Expanded(
+                  flex: 3,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 25.w),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _buildSmoothAcceleration(currentAcceleration),
+                        _buildSmoothGForceRadar(gForce, lateralX, lateralY),
+                      ],
+                    ),
+                  ),
+                ),
+
+                SizedBox(height: 20.h),
+                _buildRiskIndicator(riskLevel),
+                SizedBox(height: 30.h),
+              ],
             ),
           ),
         ],
@@ -217,102 +215,223 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
     );
   }
 
+  // ---- Smooth Animated Widgets using TweenAnimationBuilder ----
+
+  Widget _buildSmoothSpeedometer(double targetSpeed) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: targetSpeed),
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+      builder: (context, speedValue, child) {
+        Color speedColor = _getHeatColor(speedValue, 180);
+        return SizedBox(
+          width: 280.w,
+          height: 280.h,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Outer Glow
+              Container(
+                width: 260.w,
+                height: 260.h,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: speedColor.withOpacity(0.15),
+                      blurRadius: 40,
+                      spreadRadius: 10,
+                    ),
+                  ],
+                ),
+              ),
+              CustomPaint(
+                size: Size(280.w, 280.h),
+                painter: SpeedGaugePainter(
+                  speed: speedValue,
+                  maxSpeed: 200,
+                  color: speedColor,
+                ),
+              ),
+              // Inner Data Ring
+              Container(
+                width: 190.w,
+                height: 190.h,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF0A0E27).withOpacity(0.8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 15,
+                    )
+                  ],
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        speedValue.toInt().toString(),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 64.sp,
+                          height: 1.0,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'Roboto', // Or your preferred tech font
+                        ),
+                      ),
+                      Text(
+                        'KM/H',
+                        style: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 14.sp,
+                          letterSpacing: 3,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSmoothAcceleration(double targetAccel) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: targetAccel),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, accelValue, child) {
+        Color accelColor = _getHeatColor(accelValue.abs(), 5);
+        return SizedBox(
+          width: 130.w,
+          height: 130.h,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CustomPaint(
+                size: Size(130.w, 130.h),
+                painter: MiniGaugePainter(
+                  value: accelValue.abs(),
+                  maxValue: 10,
+                  color: accelColor,
+                ),
+              ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    accelValue >= 0 ? Icons.keyboard_double_arrow_up : Icons.keyboard_double_arrow_down,
+                    color: accelColor,
+                    size: 24.r,
+                  ),
+                  Text(
+                    accelValue.abs().toStringAsFixed(1),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 26.sp,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'm/s²',
+                    style: TextStyle(color: Colors.white54, fontSize: 11.sp),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSmoothGForceRadar(double targetG, double latX, double latY) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: targetG),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, gValue, child) {
+        Color gColor = _getHeatColor(gValue.abs(), 3);
+        return SizedBox(
+          width: 130.w,
+          height: 130.h,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CustomPaint(
+                size: Size(130.w, 130.h),
+                painter: RadarPainter(animation: _radarController),
+              ),
+              // Smooth transition for the G-force dot
+              TweenAnimationBuilder<Offset>(
+                tween: Tween<Offset>(begin: Offset.zero, end: Offset(latX, latY)),
+                duration: const Duration(milliseconds: 200),
+                builder: (context, offsetValue, child) {
+                  return CustomPaint(
+                    size: Size(130.w, 130.h),
+                    painter: GForceDirectionPainter(
+                      lateralX: offsetValue.dx,
+                      lateralY: offsetValue.dy,
+                      color: gColor,
+                    ),
+                  );
+                },
+              ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    gValue.abs().toStringAsFixed(1),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 26.sp,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'G',
+                    style: TextStyle(color: gColor, fontSize: 14.sp, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ---- UI Components ----
+
   Widget _buildTopBar(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 15.w, vertical: 8.h),
+      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
-              padding: EdgeInsets.all(8.r),
+              padding: EdgeInsets.all(10.r),
               decoration: BoxDecoration(
-                color: const Color(0xFF8B7CFF).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10.r),
-                border: Border.all(color: const Color(0xFF8B7CFF), width: 1.5),
+                color: const Color(0xFF8B7CFF).withOpacity(0.15),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF8B7CFF).withOpacity(0.5), width: 1.5),
               ),
-              child: Icon(
-                Icons.arrow_back,
-                color: const Color(0xFF8B7CFF),
-                size: 20.r,
-              ),
+              child: Icon(Icons.arrow_back, color: const Color(0xFF8B7CFF), size: 22.r),
             ),
           ),
-          Icon(
-            Icons.settings,
-            color: const Color(0xFF8B7CFF).withOpacity(0.6),
-            size: 22.r,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSpeedGauge(double speed) {
-    Color speedColor = _getHeatColor(speed, 180);
-
-    return SizedBox(
-      width: 240.w,
-      height: 240.h,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
           Container(
-            width: 240.w,
-            height: 240.h,
+            padding: EdgeInsets.all(10.r),
             decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: speedColor.withOpacity(0.3),
-                  blurRadius: 30,
-                  spreadRadius: 8,
-                ),
-              ],
             ),
-          ),
-          CustomPaint(
-            size: Size(240.w, 240.h),
-            painter: SpeedGaugePainter(
-              speed: speed,
-              maxSpeed: 200,
-              color: speedColor,
-              animation: _gaugeAnimationController,
-            ),
-          ),
-          Container(
-            width: 170.w,
-            height: 170.h,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [Color(0xFF1E2447), Color(0xFF0A0E27)],
-              ),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    speed.toInt().toString(),
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 52.sp,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'KM/H',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13.sp,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child: Icon(Icons.settings_outlined, color: Colors.white54, size: 22.r),
           ),
         ],
       ),
@@ -320,27 +439,29 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
   }
 
   Widget _buildWarningBanner(String message) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
-      padding: EdgeInsets.all(10.r),
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 30.w, vertical: 10.h),
+      padding: EdgeInsets.all(12.r),
       decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: Colors.orange, width: 1.5),
+        color: const Color(0xFFFF9800).withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: const Color(0xFFFF9800).withOpacity(0.8), width: 1.5),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFFFF9800).withOpacity(0.2), blurRadius: 10, spreadRadius: 1),
+        ],
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20.r),
-          SizedBox(width: 8.w),
-          Expanded(
-            child: Text(
-              'WARNING: $message',
-              style: TextStyle(
-                color: Colors.orange,
-                fontSize: 11.sp,
-                fontWeight: FontWeight.bold,
-              ),
+          Icon(Icons.warning_amber_rounded, color: const Color(0xFFFF9800), size: 22.r),
+          SizedBox(width: 10.w),
+          Text(
+            'WARNING: $message',
+            style: TextStyle(
+              color: const Color(0xFFFF9800),
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
             ),
           ),
         ],
@@ -349,148 +470,31 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
   }
 
   Widget _buildTurnIndicator(String direction) {
-    return FadeTransition(
-      opacity: _turnController,
-      child: Container(
-        margin: EdgeInsets.symmetric(horizontal: 30.w, vertical: 8.h),
-        padding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 15.w),
-        decoration: BoxDecoration(
-          color: const Color(0xFF00E5FF).withOpacity(0.2),
-          borderRadius: BorderRadius.circular(15.r),
-          border: Border.all(color: const Color(0xFF00E5FF), width: 1.5),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (direction == "left") ...[
-              Icon(Icons.arrow_back, color: const Color(0xFF00E5FF), size: 20.r),
-              SizedBox(width: 8.w),
-            ],
-            Text(
-              '${direction.toUpperCase()} TURN',
-              style: TextStyle(
-                color: const Color(0xFF00E5FF),
-                fontSize: 11.sp,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-              ),
-            ),
-            if (direction == "right") ...[
-              SizedBox(width: 8.w),
-              Icon(Icons.arrow_forward, color: const Color(0xFF00E5FF), size: 20.r),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAccelerationGauge(double acceleration) {
-    Color accelColor = _getHeatColor(acceleration.abs(), 5);
-
-    return SizedBox(
-      width: 120.w,
-      height: 120.h,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: Size(120.w, 120.h),
-            painter: MiniGaugePainter(
-              value: acceleration.abs(),
-              maxValue: 10,
-              color: accelColor,
-            ),
-          ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                acceleration > 0 ? Icons.arrow_upward : Icons.arrow_downward,
-                color: accelColor,
-                size: 18.r,
-              ),
-              SizedBox(height: 3.h),
-              Text(
-                acceleration.abs().toStringAsFixed(1),
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22.sp,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'm/s²',
-                style: TextStyle(color: Colors.white70, fontSize: 10.sp),
-              ),
-              SizedBox(height: 3.h),
-              Text(
-                'ACCELERATION',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 8.sp,
-                  letterSpacing: 0.8,
-                ),
-              ),
-            ],
-          ),
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 20.w),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00E5FF).withOpacity(0.9),
+        borderRadius: BorderRadius.circular(20.r),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.4), blurRadius: 15),
         ],
       ),
-    );
-  }
-
-  Widget _buildGForceRadar(double gForce, double lateralX, double lateralY) {
-    Color gColor = _getHeatColor(gForce.abs(), 3);
-
-    return SizedBox(
-      width: 130.w,
-      height: 130.h,
-      child: Stack(
-        alignment: Alignment.center,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          CustomPaint(
-            size: Size(130.w, 130.h),
-            painter: RadarPainter(animation: _gForceAnimationController),
-          ),
-          CustomPaint(
-            size: Size(130.w, 130.h),
-            painter: GForceDirectionPainter(
-              lateralX: lateralX,
-              lateralY: lateralY,
-              color: gColor,
+          if (direction == "left") Icon(Icons.keyboard_double_arrow_left, color: const Color(0xFF0A0E27), size: 24.r),
+          SizedBox(width: direction == "left" ? 8.w : 0),
+          Text(
+            direction.toUpperCase(),
+            style: TextStyle(
+              color: const Color(0xFF0A0E27),
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
             ),
           ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                gForce.abs().toStringAsFixed(1),
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26.sp,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'G',
-                style: TextStyle(
-                  color: gColor,
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 3.h),
-              Text(
-                'G-FORCE',
-                style: TextStyle(color: Colors.white70, fontSize: 9.sp),
-              ),
-              Text(
-                'CURRENT G',
-                style: TextStyle(color: Colors.white54, fontSize: 8.sp),
-              ),
-            ],
-          ),
+          SizedBox(width: direction == "right" ? 8.w : 0),
+          if (direction == "right") Icon(Icons.keyboard_double_arrow_right, color: const Color(0xFF0A0E27), size: 24.r),
         ],
       ),
     );
@@ -499,35 +503,40 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
   Widget _buildRiskIndicator(String riskLevel) {
     Color riskColor = _getRiskColor(riskLevel);
 
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 30.w),
-      padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 25.w),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 500),
+      margin: EdgeInsets.symmetric(horizontal: 40.w),
+      padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 30.w),
       decoration: BoxDecoration(
-        color: riskColor.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(18.r),
-        border: Border.all(color: riskColor, width: 1.5),
+        color: riskColor.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(30.r),
+        border: Border.all(color: riskColor.withOpacity(0.5), width: 2),
+        boxShadow: [
+          BoxShadow(color: riskColor.withOpacity(0.1), blurRadius: 20),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            riskLevel == "High"
-                ? Icons.error
-                : riskLevel == "Medium"
-                ? Icons.warning
-                : Icons.check_circle,
-            color: riskColor,
-            size: 20.r,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: Icon(
+              riskLevel == "High" ? Icons.error_outline :
+              riskLevel == "Medium" ? Icons.warning_amber : Icons.shield_outlined,
+              key: ValueKey(riskLevel),
+              color: riskColor,
+              size: 24.r,
+            ),
           ),
-          SizedBox(width: 8.w),
+          SizedBox(width: 12.w),
           Text(
-            'RISK: $riskLevel',
+            'SYSTEM RISK: ${riskLevel.toUpperCase()}',
             style: TextStyle(
               color: riskColor,
               fontSize: 13.sp,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 2,
             ),
           ),
         ],
@@ -536,8 +545,7 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
   }
 }
 
-// Keep all the CustomPainter classes (GridBackgroundPainter, SpeedGaugePainter, etc.)
-// exactly as they were in the previous version
+// ---- Custom Painters ----
 
 class GridBackgroundPainter extends CustomPainter {
   final Animation<double> animation;
@@ -546,10 +554,10 @@ class GridBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF8B7CFF).withOpacity(0.1)
+      ..color = const Color(0xFF8B7CFF).withOpacity(0.05)
       ..strokeWidth = 1;
 
-    double spacing = 40;
+    double spacing = 50;
     for (double x = 0; x < size.width; x += spacing) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
@@ -558,14 +566,11 @@ class GridBackgroundPainter extends CustomPainter {
     }
 
     final pulsePaint = Paint()
-      ..color = const Color(0xFF8B7CFF).withOpacity(0.3 * animation.value)
+      ..color = const Color(0xFF8B7CFF).withOpacity(0.15 * animation.value)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20)
       ..style = PaintingStyle.fill;
 
-    for (double x = 0; x < size.width; x += spacing * 2) {
-      for (double y = 0; y < size.height; y += spacing * 2) {
-        canvas.drawCircle(Offset(x, y), 3 * animation.value, pulsePaint);
-      }
-    }
+    canvas.drawCircle(Offset(size.width / 2, size.height / 2.5), 200 * animation.value, pulsePaint);
   }
 
   @override
@@ -576,83 +581,54 @@ class SpeedGaugePainter extends CustomPainter {
   final double speed;
   final double maxSpeed;
   final Color color;
-  final Animation<double> animation;
 
-  SpeedGaugePainter({
-    required this.speed,
-    required this.maxSpeed,
-    required this.color,
-    required this.animation,
-  }) : super(repaint: animation);
+  SpeedGaugePainter({required this.speed, required this.maxSpeed, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
 
+    // Track Background
     final bgPaint = Paint()
-      ..color = const Color(0xFF8B7CFF).withOpacity(0.1)
-      ..strokeWidth = 12
+      ..color = const Color(0xFF8B7CFF).withOpacity(0.05)
+      ..strokeWidth = 18
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - 10),
-      -pi * 0.75,
-      pi * 1.5,
-      false,
-      bgPaint,
-    );
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius - 15), -pi * 0.8, pi * 1.6, false, bgPaint);
 
+    // Active Speed Arc
     final speedPaint = Paint()
       ..shader = SweepGradient(
-        colors: [
-          const Color(0xFF00E5FF),
-          const Color(0xFF2196F3),
-          const Color(0xFF9C27B0),
-          color,
-        ],
-        startAngle: -pi * 0.75,
-        endAngle: pi * 0.75,
+        colors: [const Color(0xFF00E5FF), color],
+        startAngle: -pi * 0.8,
+        endAngle: pi * 0.8,
       ).createShader(Rect.fromCircle(center: center, radius: radius))
-      ..strokeWidth = 12
+      ..strokeWidth = 18
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    double sweepAngle = (speed / maxSpeed).clamp(0.0, 1.0) * pi * 1.5;
+    double sweepAngle = (speed / maxSpeed).clamp(0.0, 1.0) * pi * 1.6;
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius - 15), -pi * 0.8, sweepAngle, false, speedPaint);
 
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - 10),
-      -pi * 0.75,
-      sweepAngle,
-      false,
-      speedPaint,
-    );
-
-    final tickPaint = Paint()
-      ..color = Colors.white30
-      ..strokeWidth = 2;
-
+    // Ticks
+    final tickPaint = Paint()..color = Colors.white24..strokeWidth = 2;
     for (int i = 0; i <= 10; i++) {
-      double angle = -pi * 0.75 + (pi * 1.5) * (i / 10);
-      double startRadius = radius - 20;
-      double endRadius = radius - 10;
+      double angle = -pi * 0.8 + (pi * 1.6) * (i / 10);
+      double startRadius = radius - 35;
+      double endRadius = radius - 26;
 
-      Offset start = Offset(
-        center.dx + startRadius * cos(angle),
-        center.dy + startRadius * sin(angle),
+      canvas.drawLine(
+        Offset(center.dx + startRadius * cos(angle), center.dy + startRadius * sin(angle)),
+        Offset(center.dx + endRadius * cos(angle), center.dy + endRadius * sin(angle)),
+        tickPaint,
       );
-      Offset end = Offset(
-        center.dx + endRadius * cos(angle),
-        center.dy + endRadius * sin(angle),
-      );
-
-      canvas.drawLine(start, end, tickPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant SpeedGaugePainter oldDelegate) => oldDelegate.speed != speed;
 }
 
 class MiniGaugePainter extends CustomPainter {
@@ -660,11 +636,7 @@ class MiniGaugePainter extends CustomPainter {
   final double maxValue;
   final Color color;
 
-  MiniGaugePainter({
-    required this.value,
-    required this.maxValue,
-    required this.color,
-  });
+  MiniGaugePainter({required this.value, required this.maxValue, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -673,37 +645,24 @@ class MiniGaugePainter extends CustomPainter {
 
     final bgPaint = Paint()
       ..color = const Color(0xFF8B7CFF).withOpacity(0.1)
-      ..strokeWidth = 8
+      ..strokeWidth = 10
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - 8),
-      -pi * 0.75,
-      pi * 1.5,
-      false,
-      bgPaint,
-    );
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius - 10), -pi * 0.75, pi * 1.5, false, bgPaint);
 
     final valuePaint = Paint()
       ..color = color
-      ..strokeWidth = 8
+      ..strokeWidth = 10
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     double sweepAngle = (value / maxValue).clamp(0.0, 1.0) * pi * 1.5;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - 8),
-      -pi * 0.75,
-      sweepAngle,
-      false,
-      valuePaint,
-    );
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius - 10), -pi * 0.75, sweepAngle, false, valuePaint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant MiniGaugePainter oldDelegate) => oldDelegate.value != value;
 }
 
 class RadarPainter extends CustomPainter {
@@ -716,7 +675,7 @@ class RadarPainter extends CustomPainter {
     final maxRadius = size.width / 2;
 
     final circlePaint = Paint()
-      ..color = const Color(0xFF8B7CFF).withOpacity(0.2)
+      ..color = const Color(0xFF8B7CFF).withOpacity(0.15)
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
 
@@ -724,38 +683,15 @@ class RadarPainter extends CustomPainter {
       canvas.drawCircle(center, maxRadius * (i / 3), circlePaint);
     }
 
-    final crossPaint = Paint()
-      ..color = const Color(0xFF8B7CFF).withOpacity(0.3)
-      ..strokeWidth = 1;
-
-    canvas.drawLine(
-      Offset(center.dx - maxRadius, center.dy),
-      Offset(center.dx + maxRadius, center.dy),
-      crossPaint,
-    );
-    canvas.drawLine(
-      Offset(center.dx, center.dy - maxRadius),
-      Offset(center.dx, center.dy + maxRadius),
-      crossPaint,
-    );
-
     final sweepPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF00E5FF).withOpacity(0.6),
-          Colors.transparent,
-        ],
+      ..shader = SweepGradient(
+        colors: [Colors.transparent, const Color(0xFF00E5FF).withOpacity(0.5)],
+        stops: const [0.8, 1.0],
+        transform: GradientRotation(animation.value * 2 * pi),
       ).createShader(Rect.fromCircle(center: center, radius: maxRadius))
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+      ..style = PaintingStyle.fill;
 
-    double angle = animation.value * 2 * pi;
-    Offset sweepEnd = Offset(
-      center.dx + maxRadius * cos(angle),
-      center.dy + maxRadius * sin(angle),
-    );
-
-    canvas.drawLine(center, sweepEnd, sweepPaint);
+    canvas.drawCircle(center, maxRadius, sweepPaint);
   }
 
   @override
@@ -767,16 +703,12 @@ class GForceDirectionPainter extends CustomPainter {
   final double lateralY;
   final Color color;
 
-  GForceDirectionPainter({
-    required this.lateralX,
-    required this.lateralY,
-    required this.color,
-  });
+  GForceDirectionPainter({required this.lateralX, required this.lateralY, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final maxRadius = size.width / 3;
+    final maxRadius = size.width / 2.5;
 
     double normalizedX = (lateralX / 10).clamp(-1.0, 1.0);
     double normalizedY = (lateralY / 10).clamp(-1.0, 1.0);
@@ -786,19 +718,22 @@ class GForceDirectionPainter extends CustomPainter {
       center.dy + normalizedY * maxRadius,
     );
 
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(forcePoint, 6, paint);
-
     final linePaint = Paint()
-      ..color = color.withOpacity(0.6)
-      ..strokeWidth = 3;
+      ..color = color.withOpacity(0.5)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
 
     canvas.drawLine(center, forcePoint, linePaint);
+
+    final dotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 4);
+
+    canvas.drawCircle(forcePoint, 6, dotPaint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant GForceDirectionPainter oldDelegate) =>
+      oldDelegate.lateralX != lateralX || oldDelegate.lateralY != lateralY;
 }

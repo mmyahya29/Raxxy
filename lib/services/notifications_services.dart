@@ -2,10 +2,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:vibration/vibration.dart';
-import 'dart:io'; // ADD THIS for Platform check
-import 'package:flutter/foundation.dart'; // ADD THIS for debugPrint
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 
-final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin notificationsPlugin =
+FlutterLocalNotificationsPlugin();
 
 Future<void> initNotifications() async {
   const AndroidInitializationSettings initializationSettingsAndroid =
@@ -33,15 +34,11 @@ Future<void> sendNotification(String title, String body) async {
     playSound: true,
   );
 
-  const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+  const NotificationDetails platformDetails =
+  NotificationDetails(android: androidDetails);
 
   try {
-    await notificationsPlugin.show(
-      0,
-      title,
-      body,
-      platformDetails,
-    );
+    await notificationsPlugin.show(0, title, body, platformDetails);
     debugPrint('✅ Notification shown successfully');
   } catch (e) {
     debugPrint('❌ Error showing notification: $e');
@@ -49,19 +46,18 @@ Future<void> sendNotification(String title, String body) async {
 }
 
 class CoachingService {
-  // Singleton pattern for easy access
   static final CoachingService _instance = CoachingService._internal();
   factory CoachingService() => _instance;
-  CoachingService._internal(); // REMOVED _initTts() call from here
+  CoachingService._internal();
 
   final FlutterTts _tts = FlutterTts();
   DateTime? _lastFeedbackTime;
-  bool _isInitialized = false; // Track initialization state
+  bool _isInitialized = false;
 
-  // Cooldown duration to prevent spamming
+  // Cooldown duration to prevent feedback spam
   final Duration _cooldown = const Duration(seconds: 4);
 
-  /// Initialize TTS with proper Android configuration
+  /// Initialize TTS with proper platform configuration.
   Future<void> _initTts() async {
     if (_isInitialized) {
       debugPrint('⚠️ TTS already initialized, skipping...');
@@ -71,40 +67,32 @@ class CoachingService {
     debugPrint('🔊 Initializing TTS engine...');
 
     try {
-      // Set up completion handlers BEFORE configuring
-      _tts.setStartHandler(() {
-        debugPrint('🎤 TTS: Speech started');
-      });
+      // Register handlers BEFORE configuring settings
+      _tts.setStartHandler(() => debugPrint('🎤 TTS: Speech started'));
+      _tts.setCompletionHandler(() => debugPrint('✅ TTS: Speech completed'));
+      _tts.setErrorHandler((msg) => debugPrint('❌ TTS Error: $msg'));
+      _tts.setCancelHandler(() => debugPrint('⏹️ TTS: Speech cancelled'));
 
-      _tts.setCompletionHandler(() {
-        debugPrint('✅ TTS: Speech completed');
-      });
-
-      _tts.setErrorHandler((msg) {
-        debugPrint('❌ TTS Error: $msg');
-      });
-
-      _tts.setCancelHandler(() {
-        debugPrint('⏹️ TTS: Speech cancelled');
-      });
-
-      // Basic TTS configuration
-      await _tts.setLanguage("en-US");
+      // Core TTS settings
+      await _tts.setLanguage('en-US');
       await _tts.setSpeechRate(0.5); // Natural speaking speed
-      await _tts.setVolume(3.0); // Max volume
-      await _tts.setPitch(1.0); // Normal pitch
-      // await _tts.setVoice({"name": "en-us-x-iol-local", "locale": "en-US"});
+      // ✅ FIX: volume must be in range 0.0–1.0.
+      //    The original value of 3.0 is out-of-range and silently clamped/ignored.
+      await _tts.setVolume(1.0);
+      await _tts.setPitch(1.0);
 
-      // Platform-specific configuration
       if (Platform.isAndroid) {
         debugPrint('🤖 Applying Android-specific TTS settings...');
 
-        // Wait for speech to complete before returning
-        await _tts.awaitSpeakCompletion(true);
+        // ✅ FIX: Do NOT call awaitSpeakCompletion(true) on Android.
+        //    When set to true, it blocks the calling thread until speech finishes.
+        //    This causes the audio session to be held open, and the subsequent
+        //    _tts.stop() call (which was in triggerFeedback) releases focus —
+        //    then _tts.speak() cannot re-acquire it in time, silently failing.
+        //    Leaving it at the default (false) lets speak() be non-blocking
+        //    and the audio system manages session handoff correctly.
 
-        // Use shared TTS instance (better for background apps)
         await _tts.setSharedInstance(true);
-
         debugPrint('✅ Android TTS settings applied');
       } else if (Platform.isIOS) {
         debugPrint('🍎 Applying iOS-specific TTS settings...');
@@ -118,29 +106,33 @@ class CoachingService {
           ],
           IosTextToSpeechAudioMode.defaultMode,
         );
+        debugPrint('✅ iOS TTS settings applied');
       }
 
-      // Verify TTS is working by checking available languages
+      // Verify TTS is working
       final languages = await _tts.getLanguages;
       if (languages != null && languages.isNotEmpty) {
         debugPrint('✅ TTS initialized successfully');
         debugPrint('   Available languages: ${languages.length}');
         debugPrint('   Using language: en-US');
-        _isInitialized = true;
       } else {
         debugPrint('⚠️ TTS initialized but no languages available');
-        _isInitialized = true; // Still mark as initialized to prevent loops
       }
+
+      _isInitialized = true;
     } catch (e) {
       debugPrint('❌ Failed to initialize TTS: $e');
       _isInitialized = true; // Prevent infinite retry loops
     }
   }
 
-  /// Triggers haptic and vocal feedback with cooldown check
+  /// Triggers haptic vibration immediately, then speaks the coaching message.
+  ///
+  /// Both haptic and voice share the same cooldown timer so they always fire
+  /// together and are never split by independent gating.
   Future<void> triggerFeedback({
     required String message,
-    required List<int> vibrationPattern
+    required List<int> vibrationPattern,
   }) async {
     debugPrint('');
     debugPrint('═══════════════════════════════════════');
@@ -148,7 +140,7 @@ class CoachingService {
     debugPrint('   Message: "$message"');
     debugPrint('   Vibration pattern: $vibrationPattern');
 
-    // Initialize TTS on first use (lazy initialization)
+    // Lazy-initialize TTS on first use
     if (!_isInitialized) {
       debugPrint('   TTS not initialized, initializing now...');
       await _initTts();
@@ -156,23 +148,22 @@ class CoachingService {
 
     final now = DateTime.now();
 
-    // Check cooldown period
+    // Cooldown check — prevents rapid-fire feedback spam
     if (_lastFeedbackTime != null) {
-      final timeSinceLastFeedback = now.difference(_lastFeedbackTime!);
-      if (timeSinceLastFeedback <= _cooldown) {
-        final remainingCooldown = _cooldown - timeSinceLastFeedback;
+      final elapsed = now.difference(_lastFeedbackTime!);
+      if (elapsed <= _cooldown) {
+        final remaining = _cooldown - elapsed;
         debugPrint('⏳ Feedback blocked by cooldown');
-        debugPrint('   ${remainingCooldown.inSeconds}s remaining');
+        debugPrint('   ${remaining.inSeconds}s remaining');
         debugPrint('═══════════════════════════════════════');
         return;
       }
     }
 
-    // Update cooldown timer
     _lastFeedbackTime = now;
 
     try {
-      // 1. Trigger Haptics
+      // 1. Haptics — fire immediately, non-blocking
       debugPrint('📳 Triggering haptics...');
       if (await Vibration.hasVibrator() ?? false) {
         Vibration.vibrate(pattern: vibrationPattern);
@@ -181,14 +172,18 @@ class CoachingService {
         debugPrint('⚠️ Device has no vibrator');
       }
 
-      // 2. Trigger Voice
+      // 2. Voice — speak directly WITHOUT calling _tts.stop() first.
+      //
+      // ✅ FIX: The original code called `await _tts.stop()` here before
+      //    `_tts.speak()`. On Android this releases the audio focus, and when
+      //    speak() immediately tries to re-acquire it, the system denies it
+      //    (focus was just released). The result: vibration fires correctly
+      //    but voice is silently swallowed.
+      //
+      //    Removing stop() lets the TTS engine interrupt itself natively
+      //    if speech is already in progress, which is the correct behaviour.
       debugPrint('🔊 Triggering TTS...');
-
-      // Stop any ongoing speech first
-      await _tts.stop();
-
-      // Speak the message
-      var result = await _tts.speak(message);
+      final result = await _tts.speak(message);
 
       if (result == 1) {
         debugPrint('✅ TTS speak() initiated successfully');
@@ -197,7 +192,6 @@ class CoachingService {
       }
 
       debugPrint("📢 Coaching Feedback Delivered: '$message'");
-
     } catch (e) {
       debugPrint('❌ Error during feedback delivery: $e');
     }
@@ -206,28 +200,23 @@ class CoachingService {
     debugPrint('');
   }
 
+  /// Test voice from settings screen.
   Future<void> testVoice() async {
-    try {
-      // Initialize TTS if not already done
-      if (!_isInitialized) {
-        await _initTts();
-      }
-
-      await _tts.stop();
-      await _tts.speak("Hello! This is a test of the selected voice.");
-      debugPrint('🎤 Testing voice:');
-    } catch (e) {
-      debugPrint('❌ Error testing voice: $e');
-    }
+    if (!_isInitialized) await _initTts();
+    // For manual test we can safely stop then speak — no audio-focus race here
+    // because the user tapped a button and there is no concurrent speak() call.
+    await _tts.stop();
+    await _tts.speak('Hello! This is a test of the voice coaching system.');
+    debugPrint('🎤 Test voice triggered');
   }
 
-  /// Manually stop TTS (useful for cleanup)
+  /// Manually stop TTS (used during stopMonitoring cleanup).
   Future<void> stop() async {
     await _tts.stop();
     debugPrint('🛑 TTS stopped manually');
   }
 
-  /// Dispose method for cleanup (call when service is destroyed)
+  /// Dispose — called when the service is permanently torn down.
   void dispose() {
     _tts.stop();
     debugPrint('🗑️ CoachingService disposed');
