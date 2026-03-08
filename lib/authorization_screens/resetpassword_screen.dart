@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:raxxy/main.dart';
 import 'package:raxxy/providers/provider.dart';
+import 'package:raxxy/providers/theme_provider.dart';
 
 import '../widgets/reusable_widgets.dart';
 
@@ -112,10 +113,13 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> with 
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final themeMode = ref.watch(themeNotifierProvider);
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFF1A1F3A), // Unified dark auth theme
+      backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFFF4F5F9),
       body: buildAuth(isDark),
     );
   }
@@ -124,12 +128,18 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> with 
     return Container(
       width: double.infinity,
       height: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          colors: [Color(0xFF1E2447), Color(0xFF0A0E27)],
-          radius: 1.5,
-          center: Alignment.topCenter,
-        ),
+      decoration: BoxDecoration(
+        gradient: isDark
+            ? const RadialGradient(
+                colors: [Color(0xFF1E2447), Color(0xFF0A0E27)],
+                radius: 1.5,
+                center: Alignment.topCenter,
+              )
+            : const LinearGradient(
+                colors: [Color(0xFFF4F5F9), Color(0xFFE8EAF6)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
       ),
       child: SafeArea(
         child: SingleChildScrollView(

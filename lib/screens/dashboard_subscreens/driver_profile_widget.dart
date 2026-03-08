@@ -2,99 +2,108 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:raxxy/providers/driver_profile_provider.dart';
+import 'package:raxxy/providers/theme_provider.dart';
 
-Widget driverProfileWidget(BuildContext context) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+class DriverProfileWidget extends ConsumerWidget {
+  const DriverProfileWidget({super.key});
 
-  return Container(
-    width: MediaQuery.of(context).size.width - 40.w,
-    margin: EdgeInsets.symmetric(vertical: 10.h),
-    decoration: BoxDecoration(
-      color: isDark ? const Color(0xFF1A1F3A) : Colors.white,
-      borderRadius: BorderRadius.circular(30.r),
-      border: Border.all(
-        color: isDark ? const Color(0xFF8B7CFF).withOpacity(0.3) : Colors.blue.withOpacity(0.2),
-        width: 1.5,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: isDark ? const Color(0xFF8B7CFF).withOpacity(0.1) : Colors.black.withOpacity(0.05),
-          blurRadius: 20,
-          spreadRadius: 2,
-          offset: const Offset(0, 8),
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeNotifierProvider);
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
+    final profileAsync = ref.watch(driverProfileProvider);
+
+    return Container(
+      width: MediaQuery.of(context).size.width - 40.w,
+      margin: EdgeInsets.symmetric(vertical: 10.h),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1F3A) : Colors.white,
+        borderRadius: BorderRadius.circular(30.r),
+        border: Border.all(
+          color: isDark ? const Color(0xFF8B7CFF).withOpacity(0.3) : Colors.blue.withOpacity(0.2),
+          width: 1.5,
         ),
-      ],
-    ),
-    padding: EdgeInsets.all(24.r),
-    child: Consumer(
-      builder: (context, ref, _) {
-        final profileAsync = ref.watch(driverProfileProvider);
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? const Color(0xFF8B7CFF).withOpacity(0.1) : Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            spreadRadius: 2,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(24.r),
+      child: profileAsync.when(
+        data: (profile) {
+          final badge = profile['badge'] as Map<String, dynamic>? ?? {'emoji': '🏆', 'tier': 'Unranked'};
+          final scores = Map<String, int>.from(profile['scores'] ?? {});
+          final traits = List<String>.from(profile['secondaryTraits'] ?? []);
+          final recommendations = List<String>.from(profile['recommendations'] ?? []);
+          final stressTriggers = List<String>.from(profile['stressTriggers'] ?? []);
 
-        return profileAsync.when(
-          data: (profile) {
-            final badge = profile['badge'] as Map<String, dynamic>? ?? {'emoji': '🏆', 'tier': 'Unranked'};
-            final scores = Map<String, int>.from(profile['scores'] ?? {});
-            final traits = List<String>.from(profile['secondaryTraits'] ?? []);
-            final recommendations = List<String>.from(profile['recommendations'] ?? []);
-            final stressTriggers = List<String>.from(profile['stressTriggers'] ?? []);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildProfileHeader(profile['primaryProfile'] ?? 'Unknown Driver', badge, isDark),
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildProfileHeader(profile['primaryProfile'] ?? 'Unknown Driver', badge, isDark),
-
-                if (stressTriggers.isNotEmpty) ...[
-                  SizedBox(height: 20.h),
-                  _buildSectionTitle('STRESS TRIGGERS', const Color(0xFFFF5252), Icons.warning_amber_rounded),
-                  SizedBox(height: 10.h),
-                  _buildChipsWrap(stressTriggers, const Color(0xFFFF5252), isDark),
-                ],
-
-                if (traits.isNotEmpty) ...[
-                  SizedBox(height: 20.h),
-                  _buildSectionTitle('DRIVER TRAITS', const Color(0xFF00E5FF), Icons.psychology_rounded),
-                  SizedBox(height: 10.h),
-                  _buildChipsWrap(traits, const Color(0xFF00E5FF), isDark),
-                ],
-
-                SizedBox(height: 24.h),
-                _buildSectionTitle('PERFORMANCE METRICS', const Color(0xFF8B7CFF), Icons.analytics_outlined),
-                SizedBox(height: 15.h),
-
-                _buildAnimatedScoreBar('Overall', scores['overall'] ?? 0, const Color(0xFF8B7CFF), isDark),
-                _buildAnimatedScoreBar('Smoothness', scores['smoothness'] ?? 0, const Color(0xFF4CAF50), isDark),
-                _buildAnimatedScoreBar('Safety', scores['safety'] ?? 0, const Color(0xFF00E5FF), isDark),
-                _buildAnimatedScoreBar('Efficiency', scores['efficiency'] ?? 0, const Color(0xFFFF9800), isDark),
-
-                if (recommendations.isNotEmpty) ...[
-                  SizedBox(height: 24.h),
-                  _buildSectionTitle('SYSTEM RECOMMENDATIONS', const Color(0xFFFFC107), Icons.lightbulb_outline),
-                  SizedBox(height: 12.h),
-                  ...recommendations.map((rec) => _buildRecommendationItem(rec, isDark)),
-                ],
+              if (stressTriggers.isNotEmpty) ...[
+                SizedBox(height: 20.h),
+                _buildSectionTitle('STRESS TRIGGERS', const Color(0xFFFF5252), Icons.warning_amber_rounded),
+                SizedBox(height: 10.h),
+                _buildChipsWrap(stressTriggers, const Color(0xFFFF5252), isDark),
               ],
-            );
-          },
-          loading: () => SizedBox(
-            height: 200.h,
-            child: const Center(
-              child: CircularProgressIndicator(color: Color(0xFF8B7CFF)),
+
+              if (traits.isNotEmpty) ...[
+                SizedBox(height: 20.h),
+                _buildSectionTitle('DRIVER TRAITS', const Color(0xFF00E5FF), Icons.psychology_rounded),
+                SizedBox(height: 10.h),
+                _buildChipsWrap(traits, const Color(0xFF00E5FF), isDark),
+              ],
+
+              SizedBox(height: 24.h),
+              _buildSectionTitle('PERFORMANCE METRICS', const Color(0xFF8B7CFF), Icons.analytics_outlined),
+              SizedBox(height: 15.h),
+
+              _buildAnimatedScoreBar('Overall', scores['overall'] ?? 0, const Color(0xFF8B7CFF), isDark),
+              _buildAnimatedScoreBar('Smoothness', scores['smoothness'] ?? 0, const Color(0xFF4CAF50), isDark),
+              _buildAnimatedScoreBar('Safety', scores['safety'] ?? 0, const Color(0xFF00E5FF), isDark),
+              _buildAnimatedScoreBar('Efficiency', scores['efficiency'] ?? 0, const Color(0xFFFF9800), isDark),
+
+              if (recommendations.isNotEmpty) ...[
+                SizedBox(height: 24.h),
+                _buildSectionTitle('SYSTEM RECOMMENDATIONS', const Color(0xFFFFC107), Icons.lightbulb_outline),
+                SizedBox(height: 12.h),
+                ...recommendations.map((rec) => _buildRecommendationItem(rec, isDark)),
+              ],
+            ],
+          );
+        },
+        loading: () => SizedBox(
+          height: 200.h,
+          child: const Center(
+            child: CircularProgressIndicator(color: Color(0xFF8B7CFF)),
+          ),
+        ),
+        error: (err, stack) => SizedBox(
+          height: 200.h,
+          child: Center(
+            child: Text(
+              'SYSTEM ERROR\nUnable to load profile data.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.redAccent, fontSize: 14.sp, fontWeight: FontWeight.bold),
             ),
           ),
-          error: (err, stack) => SizedBox(
-            height: 200.h,
-            child: Center(
-              child: Text(
-                'SYSTEM ERROR\nUnable to load profile data.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.redAccent, fontSize: 14.sp, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        );
-      },
-    ),
-  );
+        ),
+      ),
+    );
+  }
+}
+
+// Keep the function wrapper for backward compatibility
+Widget driverProfileWidget(BuildContext context) {
+  return const DriverProfileWidget();
 }
 
 // ---- Helper Widgets ----

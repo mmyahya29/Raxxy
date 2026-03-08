@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
+import 'package:raxxy/providers/theme_provider.dart';
 import 'package:raxxy/screens/dashboard_screen.dart';
 import 'package:raxxy/screens/maintenance_screen.dart';
 import 'package:raxxy/screens/vehicles_screen.dart';
 import 'package:raxxy/screens/settings_screen.dart';
 
-class PersistentNavWrapper extends StatefulWidget {
+class PersistentNavWrapper extends ConsumerStatefulWidget {
   const PersistentNavWrapper({super.key});
 
   @override
-  State<PersistentNavWrapper> createState() => _PersistentNavWrapperState();
+  ConsumerState<PersistentNavWrapper> createState() => _PersistentNavWrapperState();
 }
 
-class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
+class _PersistentNavWrapperState extends ConsumerState<PersistentNavWrapper> {
   late PersistentTabController _controller;
 
   @override
@@ -70,7 +72,10 @@ class _PersistentNavWrapperState extends State<PersistentNavWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final themeMode = ref.watch(themeNotifierProvider);
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
 
     return PersistentTabView(
       context,
