@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../providers/provider.dart';
+import '../../providers/theme_provider.dart';
 
 class ProfileManagement extends ConsumerStatefulWidget {
   const ProfileManagement({super.key});
@@ -14,7 +15,10 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(firebaseAuthProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final themeMode = ref.watch(themeNotifierProvider);
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
 
     final currentUser = auth.currentUser;
     final currentName = currentUser?.displayName ?? 'Unknown Pilot';

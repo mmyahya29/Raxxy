@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import '../../providers/provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/monitoring_service/vehicle_monitor_service.dart';
 
 class LiveDrivingScreen extends ConsumerStatefulWidget {
@@ -105,7 +106,10 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
   @override
   Widget build(BuildContext context) {
     final monitorState = ref.watch(vehicleMonitorProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final themeMode = ref.watch(themeNotifierProvider);
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
 
     double currentSpeed = monitorState.speed;
     double currentAcceleration = monitorState.acceleration;
@@ -123,7 +127,7 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
         : "RAXXY SYSTEM";
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFF1A1F3A),
+      backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFFF4F5F9),
       body: Stack(
         children: [
           // Animated Background
@@ -158,7 +162,7 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        _buildSmoothSpeedometer(currentSpeed),
+                        _buildSmoothSpeedometer(currentSpeed, isDark),
 
                         // Floating Turn Indicator (Centered inside or above gauge)
                         Positioned(
@@ -197,8 +201,8 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        _buildSmoothAcceleration(currentAcceleration),
-                        _buildSmoothGForceRadar(gForce, lateralX, lateralY),
+                        _buildSmoothAcceleration(currentAcceleration, isDark),
+                        _buildSmoothGForceRadar(gForce, lateralX, lateralY, isDark),
                       ],
                     ),
                   ),
@@ -217,7 +221,7 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
 
   // ---- Smooth Animated Widgets using TweenAnimationBuilder ----
 
-  Widget _buildSmoothSpeedometer(double targetSpeed) {
+  Widget _buildSmoothSpeedometer(double targetSpeed, bool isDark) {
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: targetSpeed),
       duration: const Duration(milliseconds: 500),
@@ -259,7 +263,9 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
                 height: 190.h,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF0A0E27).withOpacity(0.8),
+                  color: isDark
+                      ? const Color(0xFF0A0E27).withOpacity(0.8)
+                      : Colors.white.withOpacity(0.8),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.5),
@@ -274,7 +280,7 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
                       Text(
                         speedValue.toInt().toString(),
                         style: TextStyle(
-                          color: Colors.white,
+                          color: isDark ? Colors.white : Colors.black87,
                           fontSize: 64.sp,
                           height: 1.0,
                           fontWeight: FontWeight.w900,
@@ -284,7 +290,7 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
                       Text(
                         'KM/H',
                         style: TextStyle(
-                          color: Colors.white54,
+                          color: isDark ? Colors.white54 : Colors.black54,
                           fontSize: 14.sp,
                           letterSpacing: 3,
                           fontWeight: FontWeight.w600,
@@ -301,7 +307,7 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
     );
   }
 
-  Widget _buildSmoothAcceleration(double targetAccel) {
+  Widget _buildSmoothAcceleration(double targetAccel, bool isDark) {
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: targetAccel),
       duration: const Duration(milliseconds: 300),
@@ -332,14 +338,14 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
                   Text(
                     accelValue.abs().toStringAsFixed(1),
                     style: TextStyle(
-                      color: Colors.white,
+                      color: isDark ? Colors.white : Colors.black87,
                       fontSize: 26.sp,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     'm/s²',
-                    style: TextStyle(color: Colors.white54, fontSize: 11.sp),
+                    style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 11.sp),
                   ),
                 ],
               ),
@@ -350,7 +356,7 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
     );
   }
 
-  Widget _buildSmoothGForceRadar(double targetG, double latX, double latY) {
+  Widget _buildSmoothGForceRadar(double targetG, double latX, double latY, bool isDark) {
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: targetG),
       duration: const Duration(milliseconds: 300),
@@ -387,7 +393,7 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
                   Text(
                     gValue.abs().toStringAsFixed(1),
                     style: TextStyle(
-                      color: Colors.white,
+                      color: isDark ? Colors.white : Colors.black87,
                       fontSize: 26.sp,
                       fontWeight: FontWeight.bold,
                     ),
