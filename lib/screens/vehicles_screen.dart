@@ -92,6 +92,7 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
               ),
             ),
             _buildAddVehicleButton(context, isDark),
+            SizedBox(height: 30.h)
           ],
         ),
       ),
