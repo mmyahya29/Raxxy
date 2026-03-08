@@ -164,7 +164,7 @@ class _MyAppState extends ConsumerState<MyApp> {
         // Dark Theme
         darkTheme: ThemeData(
           brightness: Brightness.dark,
-          scaffoldBackgroundColor: Color(0xFF323232),
+          scaffoldBackgroundColor: Color(0xFF0A0E27),
           cardColor: Color(0xff393939),
 
           colorScheme: const ColorScheme.dark(

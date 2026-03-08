@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:raxxy/providers/theme_provider.dart';
 import 'package:raxxy/providers/vehicle_provider.dart';
 import 'package:raxxy/screens/dashboard_screen.dart';
 import '../../providers/provider.dart';
@@ -54,7 +55,10 @@ class _AnimatedMonitorDashboardState extends ConsumerState<AnimatedMonitorDashbo
   @override
   Widget build(BuildContext context) {
     final monitor = ref.watch(vehicleMonitorProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final themeMode = ref.watch(themeNotifierProvider);
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 600),
