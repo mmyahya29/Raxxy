@@ -76,172 +76,98 @@ class _MyAppState extends ConsumerState<MyApp> {
         navigatorKey: navigatorKey,
         themeMode: themeMode,
 
-        // Theme configuration with pale lilac and pastel blue color scheme
+        // --- RAXXY LIGHT THEME ---
         theme: ThemeData(
           brightness: Brightness.light,
-          scaffoldBackgroundColor: const Color(0xFFEBE3F4), // Pale lilac
-          cardColor: Color(0xffe6e6e6),
+          scaffoldBackgroundColor: const Color(0xFFF4F5F9), // Clean tech grey
+          cardColor: Colors.white,
 
           colorScheme: const ColorScheme.light(
-            primary: Color(0xFF79399F), // Main accent (used in text/icons)
+            primary: Color(0xFF8B7CFF), // RAXXY Purple
             onPrimary: Colors.white,
-            secondary: Color(0xFFD4C1F0), // Pale lilac
-            onSecondary: Color(0xFF2C3E6E),
-            surface: Color(0xFFEBE3F4),
-            onSurface: Color(0xFF2C3E6E),
-            tertiary: Color(0xFF7986CB), // Darker blue for contrast
-            error: Color(0xFFB00020),
+            secondary: Color(0xFF00E5FF), // RAXXY Cyan
+            onSecondary: Color(0xFF0A0E27),
+            surface: Colors.white,
+            onSurface: Colors.black87,
+            error: Color(0xFFFF5252), // Alert Red
           ),
 
           appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF79399F), // Deep purple
+            backgroundColor: Color(0xFFF4F5F9),
+            elevation: 0,
+            iconTheme: IconThemeData(color: Color(0xFF0A0E27)),
             titleTextStyle: TextStyle(
-              color: Color(0xFFEBE3F4), // Light text on dark app bar
+              color: Color(0xFF0A0E27),
               fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-            iconTheme: IconThemeData(color: Color(0xFFEBE3F4)),
-            elevation: 3,
-            shadowColor: Color(0xFF9FA8DA),
-          ),
-
-          inputDecorationTheme: const InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.transparent,
-            border: InputBorder.none,
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(30)),
-              borderSide: BorderSide(color: Colors.transparent),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(30)),
-              borderSide: BorderSide(color: Colors.transparent),
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
             ),
           ),
 
           cardTheme: CardThemeData(
-            elevation: 4,
-            color: const Color(0xFF9FA8DA),
-            shadowColor: const Color(0xFF000000).withOpacity(0.3),
+            elevation: 0,
+            color: Colors.white,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(24.r),
+              side: BorderSide(color: Colors.black.withOpacity(0.05)),
             ),
           ),
 
           textTheme: const TextTheme(
-            bodyLarge: TextStyle(
-              color: Color(0xFF2C3E6E), // Darker blue text
-              fontSize: 16,
-            ),
-            bodyMedium: TextStyle(
-              color: Color(0xFF3F51B5), // Accent blue
-              fontSize: 14,
-            ),
+            bodyLarge: TextStyle(color: Colors.black87, fontSize: 16),
+            bodyMedium: TextStyle(color: Colors.black54, fontSize: 14),
             titleLarge: TextStyle(
-              color: Color(0xFF2C3E6E),
+              color: Color(0xFF0A0E27),
               fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFB8C5E6),
-              foregroundColor: const Color(0xFF2C3E6E),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
-              ),
-              elevation: 3,
-              shadowColor: const Color(0xFF9FA8DA).withOpacity(0.3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20.r),
-              ),
+              fontWeight: FontWeight.w900,
             ),
           ),
         ),
 
-        // Dark Theme
+        // --- RAXXY DARK THEME ---
         darkTheme: ThemeData(
           brightness: Brightness.dark,
-          scaffoldBackgroundColor: Color(0xFF0A0E27),
-          cardColor: Color(0xff393939),
+          scaffoldBackgroundColor: const Color(0xFF0A0E27), // Deep Space
+          cardColor: const Color(0xFF1A1F3A), // Elevated Space
 
           colorScheme: const ColorScheme.dark(
-            primary: Color(0xFFFFFFFF), // Light blue-grey for dark mode primary
-            onPrimary: Color(0xFF2C3E6E),
-            secondary: Color(0xFF31293E), // Dark lilac
-            onSecondary: Color(0xFFB8C5E6),
-            surface: Color(0xFF36303A),
-            onSurface: Color(0xFFB8C5E6),
-            tertiary: Color(0xFF7986CB),
-            error: Color(0xFFCF6679),
+            primary: Color(0xFF00E5FF), // RAXXY Cyan
+            onPrimary: Color(0xFF0A0E27),
+            secondary: Color(0xFF8B7CFF), // RAXXY Purple
+            onSecondary: Colors.white,
+            surface: Color(0xFF1A1F3A),
+            onSurface: Colors.white,
+            error: Color(0xFFFF5252), // Alert Red
           ),
 
           appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF68308A), // Dark grey-blue
+            backgroundColor: Color(0xFF0A0E27),
+            elevation: 0,
+            iconTheme: IconThemeData(color: Colors.white),
             titleTextStyle: TextStyle(
-              color: Color(0xFFB8C5E6),
+              color: Colors.white,
               fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-            iconTheme: IconThemeData(color: Color(0xFFB8C5E6)),
-            elevation: 3,
-            shadowColor: Color(0xFF000000),
-          ),
-
-          inputDecorationTheme: const InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.transparent,
-            border: InputBorder.none,
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(30)),
-              borderSide: BorderSide(color: Colors.transparent),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(30)),
-              borderSide: BorderSide(color: Colors.transparent),
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
             ),
           ),
 
           cardTheme: CardThemeData(
-            elevation: 4,
-            color: Color(0xFF333333), // Slightly lighter than background
-            shadowColor: Color(0xFF000000).withOpacity(0.5),
+            elevation: 0,
+            color: const Color(0xFF1A1F3A),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(24.r),
+              side: BorderSide(color: Colors.white.withOpacity(0.05)),
             ),
           ),
 
           textTheme: const TextTheme(
-            bodyLarge: TextStyle(
-              color: Color(0xFFECDFF6),
-              fontSize: 16,
-            ),
-            bodyMedium: TextStyle(
-              color: Color(0xFFECDFF6),
-              fontSize: 14,
-            ),
+            bodyLarge: TextStyle(color: Colors.white, fontSize: 16),
+            bodyMedium: TextStyle(color: Colors.white70, fontSize: 14),
             titleLarge: TextStyle(
-              color: Color(0xFFECDFF6),
+              color: Colors.white,
               fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFB8C5E6),
-              foregroundColor: const Color(0xFF2C3E6E),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
-              ),
-              elevation: 3,
-              shadowColor: const Color(0xFF000000).withOpacity(0.3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20.r),
-              ),
+              fontWeight: FontWeight.w900,
             ),
           ),
         ),
@@ -249,12 +175,12 @@ class _MyAppState extends ConsumerState<MyApp> {
         debugShowCheckedModeBanner: false,
 
         home: authState.when(
-          data: (user) => user != null ? PersistentNavWrapper() : LoginScreen(),
+          data: (user) => user != null ? const PersistentNavWrapper() : const LoginScreen(),
           loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+            body: Center(child: CircularProgressIndicator(color: Color(0xFF00E5FF))),
           ),
           error: (e, _) => Scaffold(
-            body: Center(child: Text('Error: $e')),
+            body: Center(child: Text('System Error: $e')),
           ),
         ),
       ),
