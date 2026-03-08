@@ -20,7 +20,7 @@ class VehiclesScreen extends ConsumerStatefulWidget {
 
 class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
   int? expandedIndex;
-  String? monitoringVehicleId; // Track which vehicle is being monitored
+  String? monitoringVehicleId;
 
   @override
   void initState() {
@@ -30,62 +30,28 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
 
   Future<void> _initPermissionsAndStart() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      // prompt user to enable GPS
-      return;
-    }
+    if (!serviceEnabled) return;
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        // cannot proceed
-        return;
-      }
+      if (permission == LocationPermission.denied) return;
     }
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = ref.read(firebaseAuthProvider);
     final mileageController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
+      backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFFF4F5F9),
+      body: SafeArea(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Manage Vehicles', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24.sp)),
-            Text('What are we driving today?', style: TextStyle(fontSize: 14.sp, color: Colors.grey)),
-          ],
-        ),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xff6a11cb), Color(0xff2575fc)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xff2575fc).withOpacity(0.3),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-        ),
-        centerTitle: false,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20).r,
-        child: Column(
-          children: [
+            _buildCustomAppBar(isDark),
             Expanded(
               child: Consumer(
                 builder: (context, ref, _) {
@@ -94,585 +60,621 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                   return vehiclesAsync.when(
                     data: (vehicles) {
                       if (vehicles.isEmpty) {
-                        return const Center(child: Text('No current vehicles'));
+                        return _buildEmptyState(isDark);
                       }
 
                       return ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
                         itemCount: vehicles.length,
                         itemBuilder: (context, index) {
                           final vehicle = vehicles[index];
                           final isExpanded = expandedIndex == index;
-                          final isMonitoring =
-                              monitoringVehicleId == vehicle.id;
+                          final isMonitoring = monitoringVehicleId == vehicle.id;
 
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                expandedIndex = isExpanded ? null : index;
-                              });
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 500),
-                              curve: Curves.easeInOut,
-                              margin: EdgeInsets.symmetric(vertical: 8.h),
-                              padding: EdgeInsets.all(12.w),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).cardColor,
-                                borderRadius: BorderRadius.circular(20.r),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 4,
-                                    spreadRadius: 3,
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        (vehicle['type'] == 'car' ||
-                                                vehicle['type'] == 'Car')
-                                            ? Icons
-                                                .directions_car_filled_rounded
-                                            : Icons.directions_bike_rounded,
-                                        size: 30.r,
-                                      ),
-                                      SizedBox(width: 16.w),
-                                      Text(
-                                        '${vehicle['make']} ${vehicle['model']}',
-                                        style: TextStyle(
-                                          fontSize: 20.sp,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  AnimatedSize(
-                                    duration: const Duration(milliseconds: 300),
-                                    curve: Curves.easeInOut,
-                                    child:
-                                        isExpanded
-                                            ? Padding(
-                                              padding: EdgeInsets.only(
-                                                top: 10.h,
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  SizedBox(height: 10.h),
-                                                  Text(
-                                                    'Type: ${vehicle['type']}',
-                                                  ),
-                                                  Text(
-                                                    'Year: ${vehicle['year']}',
-                                                  ),
-                                                  Text(
-                                                    'Mileage: ${(vehicle['mileage'] as num).toDouble().toStringAsFixed(2)} km',
-                                                  ),
-                                                  SizedBox(height: 10.h),
-                                                  Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .spaceEvenly,
-                                                    children: [
-                                                      // DELETE BUTTON WITH CONFIRMATION
-                                                      ElevatedButton(
-                                                        onPressed: () async {
-                                                          // Show confirmation dialog
-                                                          final confirmed = await showDialog<
-                                                            bool
-                                                          >(
-                                                            context: context,
-                                                            builder:
-                                                                (
-                                                                  ctx,
-                                                                ) => AlertDialog(
-                                                                  title: const Text(
-                                                                    "Delete Vehicle?",
-                                                                  ),
-                                                                  content: Text(
-                                                                    "Are you sure you want to delete ${vehicle['make']} ${vehicle['model']}?\n\nThis will permanently remove the vehicle and all its trip history.",
-                                                                  ),
-                                                                  actions: [
-                                                                    TextButton(
-                                                                      onPressed:
-                                                                          () => Navigator.of(
-                                                                            ctx,
-                                                                          ).pop(
-                                                                            false,
-                                                                          ),
-                                                                      child: const Text(
-                                                                        "Cancel",
-                                                                      ),
-                                                                    ),
-                                                                    ElevatedButton(
-                                                                      onPressed:
-                                                                          () => Navigator.of(
-                                                                            ctx,
-                                                                          ).pop(
-                                                                            true,
-                                                                          ),
-                                                                      style: ElevatedButton.styleFrom(
-                                                                        backgroundColor:
-                                                                            Colors.red,
-                                                                      ),
-                                                                      child: const Text(
-                                                                        "Delete",
-                                                                        style: TextStyle(
-                                                                          color:
-                                                                              Colors.white,
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                          );
-
-                                                          // If user confirmed deletion
-                                                          if (confirmed ==
-                                                              true) {
-                                                            // If vehicle is being monitored, stop monitoring first
-                                                            if (monitoringVehicleId ==
-                                                                vehicle.id) {
-                                                              final stopConfirmed = await showDialog<
-                                                                bool
-                                                              >(
-                                                                context:
-                                                                    context,
-                                                                builder:
-                                                                    (
-                                                                      ctx,
-                                                                    ) => AlertDialog(
-                                                                      title: const Text(
-                                                                        "Stop Monitoring First",
-                                                                      ),
-                                                                      content:
-                                                                          const Text(
-                                                                            "This vehicle is currently being monitored. Do you want to stop monitoring and delete it?",
-                                                                          ),
-                                                                      actions: [
-                                                                        TextButton(
-                                                                          onPressed:
-                                                                              () => Navigator.of(
-                                                                                ctx,
-                                                                              ).pop(
-                                                                                false,
-                                                                              ),
-                                                                          child: const Text(
-                                                                            "Cancel",
-                                                                          ),
-                                                                        ),
-                                                                        ElevatedButton(
-                                                                          onPressed:
-                                                                              () => Navigator.of(
-                                                                                ctx,
-                                                                              ).pop(
-                                                                                true,
-                                                                              ),
-                                                                          style: ElevatedButton.styleFrom(
-                                                                            backgroundColor:
-                                                                                Colors.red,
-                                                                          ),
-                                                                          child: const Text(
-                                                                            "Stop & Delete",
-                                                                            style: TextStyle(
-                                                                              color:
-                                                                                  Colors.white,
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                      ],
-                                                                    ),
-                                                              );
-
-                                                              if (stopConfirmed ==
-                                                                  true) {
-                                                                // Stop monitoring without mileage dialog
-                                                                VehicleMonitorService()
-                                                                    .stopMonitoring(
-                                                                      ref,
-                                                                    );
-                                                                monitoringVehicleId =
-                                                                    null;
-                                                              } else {
-                                                                return; // User cancelled
-                                                              }
-                                                            }
-
-                                                            // Delete the vehicle
-                                                            try {
-                                                              await ref
-                                                                  .read(
-                                                                    firestoreProvider,
-                                                                  )
-                                                                  .collection(
-                                                                    'users',
-                                                                  )
-                                                                  .doc(
-                                                                    auth
-                                                                        .currentUser
-                                                                        ?.uid,
-                                                                  )
-                                                                  .collection(
-                                                                    'vehicles',
-                                                                  )
-                                                                  .doc(
-                                                                    vehicle.id,
-                                                                  )
-                                                                  .delete();
-
-                                                              if (context
-                                                                  .mounted) {
-                                                                ScaffoldMessenger.of(
-                                                                  context,
-                                                                ).showSnackBar(
-                                                                  SnackBar(
-                                                                    content: Text(
-                                                                      '✅ ${vehicle['make']} ${vehicle['model']} deleted successfully',
-                                                                    ),
-                                                                    backgroundColor:
-                                                                        Colors
-                                                                            .green,
-                                                                  ),
-                                                                );
-                                                              }
-                                                              setState(() {});
-                                                            } catch (e) {
-                                                              if (context
-                                                                  .mounted) {
-                                                                ScaffoldMessenger.of(
-                                                                  context,
-                                                                ).showSnackBar(
-                                                                  SnackBar(
-                                                                    content: Text(
-                                                                      '❌ Error deleting vehicle: $e',
-                                                                    ),
-                                                                    backgroundColor:
-                                                                        Colors
-                                                                            .red,
-                                                                  ),
-                                                                );
-                                                              }
-                                                            }
-                                                          }
-                                                        },
-                                                        style:
-                                                            ElevatedButton.styleFrom(
-                                                              backgroundColor:
-                                                                  Colors.red,
-                                                            ),
-                                                        child: const Text(
-                                                          'Delete',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                          ),
-                                                        ),
-                                                      ),
-
-                                                      // START/STOP MONITORING BUTTON
-                                                      ElevatedButton(
-                                                        onPressed: () async {
-                                                          if (isMonitoring) {
-                                                            // STOP MONITORING - Show mileage dialog
-                                                            showDialog(
-                                                              context: context,
-                                                              builder:
-                                                                  (
-                                                                    ctx,
-                                                                  ) => AlertDialog(
-                                                                    title: const Text(
-                                                                      "Stop Monitoring",
-                                                                    ),
-                                                                    content: Column(
-                                                                      mainAxisSize:
-                                                                          MainAxisSize
-                                                                              .min,
-                                                                      crossAxisAlignment:
-                                                                          CrossAxisAlignment
-                                                                              .start,
-                                                                      children: [
-                                                                        const Text(
-                                                                          "Enter new mileage to correct hardware inaccuracies, or leave empty to use GPS-calculated distance.",
-                                                                          style: TextStyle(
-                                                                            fontSize:
-                                                                                14,
-                                                                          ),
-                                                                        ),
-                                                                        SizedBox(
-                                                                          height:
-                                                                              10.h,
-                                                                        ),
-                                                                        TextField(
-                                                                          controller:
-                                                                              mileageController,
-                                                                          keyboardType:
-                                                                              TextInputType.number,
-                                                                          decoration: const InputDecoration(
-                                                                            hintText:
-                                                                                "Leave empty for GPS distance",
-                                                                            labelText:
-                                                                                "New Mileage (km) - Optional",
-                                                                            border:
-                                                                                OutlineInputBorder(),
-                                                                          ),
-                                                                        ),
-                                                                      ],
-                                                                    ),
-                                                                    actions: [
-                                                                      TextButton(
-                                                                        onPressed: () {
-                                                                          Navigator.of(
-                                                                            ctx,
-                                                                          ).pop();
-                                                                        },
-                                                                        child: const Text(
-                                                                          "Cancel",
-                                                                        ),
-                                                                      ),
-                                                                      ElevatedButton(
-                                                                        onPressed: () async {
-                                                                          final inputText =
-                                                                              mileageController.text.trim();
-
-                                                                          if (inputText
-                                                                              .isEmpty) {
-                                                                            // Empty string - Use GPS distance (add to current mileage)
-                                                                            VehicleMonitorService().stopMonitoring(
-                                                                              ref,
-                                                                            );
-                                                                            monitoringVehicleId =
-                                                                                null;
-                                                                            setState(
-                                                                              () {},
-                                                                            );
-                                                                            Navigator.of(
-                                                                              ctx,
-                                                                            ).pop();
-                                                                            mileageController.clear();
-                                                                          } else {
-                                                                            // User entered a number - Set mileage TO this value
-                                                                            final newMileage = double.tryParse(
-                                                                              inputText,
-                                                                            );
-
-                                                                            if (newMileage !=
-                                                                                    null &&
-                                                                                newMileage >=
-                                                                                    0) {
-                                                                              // Calculate the difference from current mileage
-                                                                              final currentMileage =
-                                                                                  (vehicle['mileage']
-                                                                                          as num)
-                                                                                      .toDouble();
-                                                                              final mileageDifference =
-                                                                                  newMileage -
-                                                                                  currentMileage;
-
-                                                                              if (mileageDifference <
-                                                                                  0) {
-                                                                                // New mileage is less than current - show error
-                                                                                ScaffoldMessenger.of(
-                                                                                  context,
-                                                                                ).showSnackBar(
-                                                                                  SnackBar(
-                                                                                    content: Text(
-                                                                                      '⚠️ New mileage ($newMileage km) cannot be less than current mileage ($currentMileage km)',
-                                                                                    ),
-                                                                                    backgroundColor:
-                                                                                        Colors.orange,
-                                                                                    duration: const Duration(
-                                                                                      seconds:
-                                                                                          3,
-                                                                                    ),
-                                                                                  ),
-                                                                                );
-                                                                                return;
-                                                                              }
-
-                                                                              // Use the difference as manual mileage to add
-                                                                              VehicleMonitorService().stopMonitoring(
-                                                                                ref,
-                                                                                manualMileage:
-                                                                                    mileageDifference,
-                                                                              );
-                                                                              monitoringVehicleId =
-                                                                                  null;
-                                                                              setState(
-                                                                                () {},
-                                                                              );
-                                                                              Navigator.of(
-                                                                                ctx,
-                                                                              ).pop();
-                                                                              mileageController.clear();
-                                                                            } else {
-                                                                              // Invalid number
-                                                                              ScaffoldMessenger.of(
-                                                                                context,
-                                                                              ).showSnackBar(
-                                                                                const SnackBar(
-                                                                                  content: Text(
-                                                                                    '⚠️ Please enter a valid mileage value',
-                                                                                  ),
-                                                                                  backgroundColor:
-                                                                                      Colors.orange,
-                                                                                ),
-                                                                              );
-                                                                            }
-                                                                          }
-                                                                        },
-                                                                        child: const Text(
-                                                                          "Stop Monitoring",
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                            );
-                                                          } else {
-                                                            // START MONITORING - Show info dialog
-                                                            showDialog(
-                                                              context: context,
-                                                              builder:
-                                                                  (
-                                                                    ctx,
-                                                                  ) => AlertDialog(
-                                                                    title: const Text(
-                                                                      "Starting to drive?",
-                                                                    ),
-                                                                    content:
-                                                                        const Text(
-                                                                          "Make sure to set your device on the dashboard of your car or on a phone stand of your Bike for better accuracy, Otherwise you might experience crappy monitoring...",
-                                                                        ),
-                                                                    actions: [
-                                                                      ElevatedButton(
-                                                                        onPressed:
-                                                                            () =>
-                                                                                Navigator.of(ctx).pop(),
-                                                                        child: const Text(
-                                                                          "Okay",
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                            );
-                                                            await VehicleMonitorService()
-                                                                .startMonitoring(
-                                                                  context:
-                                                                      context,
-                                                                  userId:
-                                                                      auth
-                                                                          .currentUser!
-                                                                          .uid,
-                                                                  vehicleId:
-                                                                      vehicle
-                                                                          .id,
-                                                                  make:
-                                                                      vehicle['make'],
-                                                                  model:
-                                                                      vehicle['model'],
-                                                                  ref: ref,
-                                                                );
-                                                            monitoringVehicleId =
-                                                                vehicle.id;
-                                                          }
-                                                          setState(() {});
-                                                        },
-                                                        style:
-                                                            ElevatedButton.styleFrom(
-                                                              backgroundColor:
-                                                                  isMonitoring
-                                                                      ? Colors
-                                                                          .orange
-                                                                      : Colors
-                                                                          .green,
-                                                            ),
-                                                        child: Text(
-                                                          isMonitoring
-                                                              ? 'Stop'
-                                                              : 'Start',
-                                                          style:
-                                                              const TextStyle(
-                                                                color:
-                                                                    Colors
-                                                                        .white,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
-                                            )
-                                            : const SizedBox.shrink(),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          return _buildVehicleCard(
+                            context,
+                            vehicle,
+                            index,
+                            isExpanded,
+                            isMonitoring,
+                            isDark,
+                            auth,
+                            mileageController,
                           );
                         },
-                        clipBehavior: Clip.none,
                       );
                     },
-                    loading:
-                        () => const Center(child: CircularProgressIndicator()),
-                    error: (e, _) => Center(child: Text('Error: $e')),
+                    loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF8B7CFF))),
+                    error: (e, _) => Center(child: Text('System Error: $e', style: const TextStyle(color: Colors.redAccent))),
                   );
                 },
               ),
             ),
-            SizedBox(height: 10.h),
-            InkWell(
-              onTap: (){
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddVehicleScreen()),
-                );
-              },
-              child: Container(
-                height: 50.h,
-                width: MediaQuery.of(context).size.width - 40,
+            _buildAddVehicleButton(context, isDark),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---- UI Components ----
+
+  Widget _buildCustomAppBar(bool isDark) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 20.h),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1F3A) : Colors.white,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30.r)),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black.withOpacity(0.5) : Colors.blue.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(12.r),
+            decoration: BoxDecoration(
+              color: const Color(0xFF8B7CFF).withOpacity(0.15),
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+            child: Icon(Icons.garage_rounded, color: const Color(0xFF8B7CFF), size: 28.r),
+          ),
+          SizedBox(width: 15.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'FLEET COMMAND',
+                  style: TextStyle(
+                    fontSize: 22.sp,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : Colors.black87,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                Text(
+                  'Select a vehicle to initialize telemetry',
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white54 : Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.commute_outlined, size: 60.r, color: isDark ? Colors.white24 : Colors.grey.withOpacity(0.5)),
+          SizedBox(height: 15.h),
+          Text(
+            'NO VEHICLES DETECTED',
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white54 : Colors.grey,
+              letterSpacing: 2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVehicleCard(
+      BuildContext context,
+      dynamic vehicle,
+      int index,
+      bool isExpanded,
+      bool isMonitoring,
+      bool isDark,
+      dynamic auth,
+      TextEditingController mileageController,
+      ) {
+    Color accentColor = isMonitoring ? const Color(0xFF00E5FF) : const Color(0xFF8B7CFF);
+
+    return GestureDetector(
+      onTap: () => setState(() => expandedIndex = isExpanded ? null : index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+        margin: EdgeInsets.only(bottom: 15.h),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1F3A) : Colors.white,
+          borderRadius: BorderRadius.circular(24.r),
+          border: Border.all(
+            color: isMonitoring ? accentColor.withOpacity(0.6) : (isDark ? Colors.white10 : Colors.grey.shade200),
+            width: isMonitoring ? 2 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isMonitoring ? accentColor.withOpacity(0.2) : Colors.black.withOpacity(0.05),
+              blurRadius: isMonitoring ? 20 : 10,
+              spreadRadius: isMonitoring ? 2 : 0,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24.r),
+          child: Column(
+            children: [
+              // Card Header
+              Container(
+                padding: EdgeInsets.all(16.r),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20.r),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xff6a11cb), Color(0xff2575fc)],
+                  gradient: isMonitoring
+                      ? LinearGradient(
+                    colors: [accentColor.withOpacity(0.15), Colors.transparent],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xff2575fc).withOpacity(0.3),
-                      blurRadius: 15,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
+                  )
+                      : null,
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      'Add a New Vehicle',
-                      style: TextStyle(
-                        fontSize: 20.sp,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xffffffff),
+                    Container(
+                      padding: EdgeInsets.all(12.r),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.black26 : Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: isMonitoring ? accentColor.withOpacity(0.5) : Colors.transparent),
+                      ),
+                      child: Icon(
+                        (vehicle['type'].toString().toLowerCase() == 'car')
+                            ? Icons.directions_car_filled_rounded
+                            : Icons.two_wheeler_rounded,
+                        color: isMonitoring ? accentColor : (isDark ? Colors.white70 : Colors.black54),
+                        size: 24.r,
                       ),
                     ),
-                    SizedBox(width: 5.w),
+                    SizedBox(width: 15.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${vehicle['make']} ${vehicle['model']}'.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? Colors.white : Colors.black87,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          if (isMonitoring)
+                            Row(
+                              children: [
+                                Container(
+                                  width: 6.r,
+                                  height: 6.r,
+                                  decoration: BoxDecoration(color: accentColor, shape: BoxShape.circle),
+                                ),
+                                SizedBox(width: 6.w),
+                                Text(
+                                  'ACTIVE TELEMETRY',
+                                  style: TextStyle(fontSize: 10.sp, fontWeight: FontWeight.bold, color: accentColor),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
                     Icon(
-                      Icons.add_circle,
-                      size: 30.r,
-                      color: Color(0xffffffff),
+                      isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      color: isDark ? Colors.white30 : Colors.grey,
                     ),
                   ],
                 ),
               ),
+
+              // Expanded Content
+              AnimatedSize(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topCenter,
+                child: isExpanded
+                    ? Container(
+                  padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.h),
+                  child: Column(
+                    children: [
+                      Divider(color: isDark ? Colors.white10 : Colors.grey.shade200),
+                      SizedBox(height: 10.h),
+                      // Data Pills
+                      Row(
+                        children: [
+                          Expanded(child: _buildDataPill('TYPE', vehicle['type'].toString().toUpperCase(), isDark)),
+                          SizedBox(width: 8.w),
+                          Expanded(child: _buildDataPill('YEAR', vehicle['year'].toString(), isDark)),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            flex: 2,
+                            child: _buildDataPill(
+                              'MILEAGE',
+                              '${(vehicle['mileage'] as num).toDouble().toStringAsFixed(1)} km',
+                              isDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 20.h),
+                      // Action Buttons
+                      Row(
+                        children: [
+                          // Delete Button
+                          Expanded(
+                            flex: 1,
+                            child: GestureDetector(
+                              onTap: () => _handleDelete(context, vehicle, isMonitoring, auth, isDark),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(vertical: 12.h),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF5252).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(16.r),
+                                  border: Border.all(color: const Color(0xFFFF5252).withOpacity(0.3)),
+                                ),
+                                child: Icon(Icons.delete_outline_rounded, color: const Color(0xFFFF5252), size: 20.r),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 10.w),
+                          // Start/Stop Button
+                          Expanded(
+                            flex: 4,
+                            child: GestureDetector(
+                              onTap: () => _handleMonitoringToggle(
+                                context,
+                                vehicle,
+                                isMonitoring,
+                                auth,
+                                mileageController,
+                                isDark,
+                              ),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(vertical: 12.h),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: isMonitoring
+                                        ? [const Color(0xFFFF9800), const Color(0xFFFF5252)] // Stop (Orange/Red)
+                                        : [const Color(0xFF00E5FF), const Color(0xFF2196F3)], // Start (Cyan/Blue)
+                                  ),
+                                  borderRadius: BorderRadius.circular(16.r),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isMonitoring
+                                          ? const Color(0xFFFF9800).withOpacity(0.3)
+                                          : const Color(0xFF00E5FF).withOpacity(0.3),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      isMonitoring ? Icons.stop_circle_rounded : Icons.play_circle_fill_rounded,
+                                      color: Colors.white,
+                                      size: 20.r,
+                                    ),
+                                    SizedBox(width: 8.w),
+                                    Text(
+                                      isMonitoring ? 'TERMINATE SESSION' : 'INITIALIZE SESSION',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12.sp,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataPill(String label, String value, bool isDark) {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 8.w),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0A0E27) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.transparent),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 8.sp, fontWeight: FontWeight.bold, color: isDark ? Colors.white54 : Colors.grey)),
+          SizedBox(height: 2.h),
+          Text(
+            value,
+            style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.black87),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddVehicleButton(BuildContext context, bool isDark) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20.w, 10.h, 20.w, 20.h),
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddVehicleScreen())),
+        borderRadius: BorderRadius.circular(20.r),
+        child: Container(
+          height: 55.h,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20.r),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF8B7CFF), Color(0xFF00E5FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 5)),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_circle_outline_rounded, size: 24.r, color: Colors.white),
+              SizedBox(width: 8.w),
+              Text(
+                'REGISTER NEW VEHICLE',
+                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---- Logic & Custom Dialogs ----
+
+  Future<void> _handleDelete(BuildContext context, dynamic vehicle, bool isMonitoring, dynamic auth, bool isDark) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _buildCustomDialog(
+        context: ctx,
+        isDark: isDark,
+        title: "CONFIRM DELETION",
+        titleColor: const Color(0xFFFF5252),
+        content: "Are you sure you want to purge ${vehicle['make']} ${vehicle['model']} from the fleet network?\n\nThis action is irreversible.",
+        confirmText: "PURGE VEHICLE",
+        confirmColor: const Color(0xFFFF5252),
+      ),
+    );
+
+    if (confirmed == true) {
+      if (isMonitoring) {
+        final stopConfirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => _buildCustomDialog(
+            context: ctx,
+            isDark: isDark,
+            title: "ACTIVE TELEMETRY",
+            titleColor: const Color(0xFFFF9800),
+            content: "This vehicle is currently active. Do you want to force terminate the session and delete?",
+            confirmText: "TERMINATE & PURGE",
+            confirmColor: const Color(0xFFFF5252),
+          ),
+        );
+
+        if (stopConfirmed == true) {
+          VehicleMonitorService().stopMonitoring(ref);
+          monitoringVehicleId = null;
+        } else {
+          return;
+        }
+      }
+
+      try {
+        await ref.read(firestoreProvider)
+            .collection('users')
+            .doc(auth.currentUser?.uid)
+            .collection('vehicles')
+            .doc(vehicle.id)
+            .delete();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('✅ ${vehicle['make']} deleted successfully'), backgroundColor: Colors.green),
+          );
+          setState(() {});
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleMonitoringToggle(
+      BuildContext context,
+      dynamic vehicle,
+      bool isMonitoring,
+      dynamic auth,
+      TextEditingController mileageController,
+      bool isDark,
+      ) async {
+    if (isMonitoring) {
+      // STOP
+      mileageController.clear();
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1A1F3A) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24.r),
+            side: BorderSide(color: const Color(0xFFFF9800).withOpacity(0.5)),
+          ),
+          title: Text(
+            "TERMINATE SESSION",
+            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, color: const Color(0xFFFF9800), letterSpacing: 1.5),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Enter new odometer reading to recalibrate hardware inaccuracies, or leave empty to use GPS distance.",
+                style: TextStyle(fontSize: 12.sp, color: isDark ? Colors.white70 : Colors.black87),
+              ),
+              SizedBox(height: 15.h),
+              TextField(
+                controller: mileageController,
+                keyboardType: TextInputType.number,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  hintText: "GPS Distance (Default)",
+                  hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.black26),
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF0A0E27) : Colors.grey.shade100,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16.r), borderSide: BorderSide.none),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16.r), borderSide: const BorderSide(color: Color(0xFFFF9800), width: 2)),
+                  suffixText: "km",
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text("CANCEL", style: TextStyle(color: isDark ? Colors.white54 : Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF9800), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
+              onPressed: () {
+                final inputText = mileageController.text.trim();
+                if (inputText.isEmpty) {
+                  VehicleMonitorService().stopMonitoring(ref);
+                  monitoringVehicleId = null;
+                  setState(() {});
+                  Navigator.of(ctx).pop();
+                } else {
+                  final newMileage = double.tryParse(inputText);
+                  if (newMileage != null && newMileage >= 0) {
+                    final currentMileage = (vehicle['mileage'] as num).toDouble();
+                    final difference = newMileage - currentMileage;
+
+                    if (difference < 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ New mileage cannot be lower than current ($currentMileage km)'), backgroundColor: Colors.orange));
+                      return;
+                    }
+                    VehicleMonitorService().stopMonitoring(ref, manualMileage: difference);
+                    monitoringVehicleId = null;
+                    setState(() {});
+                    Navigator.of(ctx).pop();
+                  }
+                }
+              },
+              child: const Text("END DRIVE"),
             ),
           ],
         ),
+      );
+    } else {
+      // START
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => _buildCustomDialog(
+          context: ctx,
+          isDark: isDark,
+          title: "SYSTEM CALIBRATION",
+          titleColor: const Color(0xFF00E5FF),
+          content: "Ensure your device is securely mounted on the dashboard or a phone stand. Unstable placement will result in inaccurate G-Force and telemetry readings.",
+          confirmText: "ACKNOWLEDGE",
+          confirmColor: const Color(0xFF00E5FF),
+        ),
+      );
+
+      if (proceed == true) {
+        await VehicleMonitorService().startMonitoring(
+          context: context,
+          userId: auth.currentUser!.uid,
+          vehicleId: vehicle.id,
+          make: vehicle['make'],
+          model: vehicle['model'],
+          ref: ref,
+        );
+        setState(() => monitoringVehicleId = vehicle.id);
+      }
+    }
+  }
+
+  Widget _buildCustomDialog({
+    required BuildContext context,
+    required bool isDark,
+    required String title,
+    required Color titleColor,
+    required String content,
+    required String confirmText,
+    required Color confirmColor,
+  }) {
+    return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF1A1F3A) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24.r),
+        side: BorderSide(color: titleColor.withOpacity(0.5)),
       ),
+      title: Text(
+        title,
+        style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, color: titleColor, letterSpacing: 1.5),
+      ),
+      content: Text(
+        content,
+        style: TextStyle(fontSize: 13.sp, color: isDark ? Colors.white70 : Colors.black87, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text("CANCEL", style: TextStyle(color: isDark ? Colors.white54 : Colors.grey)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: confirmColor.withOpacity(0.2),
+            foregroundColor: confirmColor,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+          ),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(confirmText, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      ],
     );
   }
 }
