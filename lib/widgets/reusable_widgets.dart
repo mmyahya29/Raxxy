@@ -1,113 +1,157 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-Widget buildTextField(BuildContext context, TextEditingController controller, String hint, VoidCallback rebuild, {bool pass=false, bool obscure = false, TextInputType inputType = TextInputType.text}) {
+Widget buildTextField(
+    BuildContext context,
+    TextEditingController controller,
+    String hint,
+    VoidCallback rebuild, {
+      bool pass = false,
+      bool obscure = false,
+      TextInputType inputType = TextInputType.text,
+    }) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final accentColor = const Color(0xFF00E5FF); // RAXXY Cyan
 
-  return Container(
-    height: 50.h,
-    width: 320.w,
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(20.r),
-      color: Theme.of(context).cardColor,
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.3),
-          blurRadius: 4,
-          spreadRadius: 3,
-        ),
-      ],
+  return TextFormField(
+    controller: controller,
+    keyboardType: inputType,
+    obscureText: obscure,
+    style: TextStyle(
+      color: isDark ? Colors.white : Colors.black87,
+      fontWeight: FontWeight.w700,
+      fontSize: 14.sp,
+      letterSpacing: obscure ? 3.0 : 0.5, // Spreads out password dots
     ),
-    child: TextFormField(
-      controller: controller,
-      keyboardType: inputType,
-      obscureText: obscure,
-      decoration: InputDecoration(
-        filled: true,
-        hintText: hint,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20.r),
-          borderSide: BorderSide.none,
-        ),
-          suffixIcon: (pass==true)?IconButton(
-          onPressed: () {
-            rebuild();
-          },
-          icon: Icon(Icons.remove_red_eye_outlined),
-          color: obscure?Colors.blueGrey:Color(0xff664bff),
-        ):null,
+    decoration: InputDecoration(
+      filled: true,
+      fillColor: isDark ? const Color(0xFF0A0E27) : Colors.grey.shade100,
+      hintText: hint,
+      hintStyle: TextStyle(
+        color: isDark ? Colors.white30 : Colors.black26,
+        fontWeight: FontWeight.w500,
+        fontSize: 13.sp,
+        letterSpacing: 0.5,
       ),
+      contentPadding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 18.h),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16.r),
+        borderSide: BorderSide(
+          color: isDark ? Colors.white10 : Colors.black12,
+          width: 1.5,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16.r),
+        borderSide: BorderSide(color: accentColor, width: 2),
+      ),
+      suffixIcon: pass
+          ? IconButton(
+        onPressed: rebuild,
+        icon: Icon(
+          obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+          size: 20.r,
+        ),
+        color: obscure
+            ? (isDark ? Colors.white30 : Colors.black26)
+            : accentColor,
+      )
+          : null,
     ),
   );
 }
 
-Widget buildButton(String text, VoidCallback onPressed, String? image, {Color color = const Color(0xff664bff)}) {
+Widget buildButton(String text, VoidCallback onPressed, String? image, {Color color = const Color(0xFF8B7CFF)}) {
   return Container(
-    height: 50.h,
-    width: 260.w,
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(20.r),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.3),
-          blurRadius: 4,
-          spreadRadius: 3,
-        ),
-      ],
-    ),
-    child: ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.r),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            text,
-            style: TextStyle(fontSize: 18.sp, color: Colors.white),
-          ),
-          if(image!=null)
-          SizedBox(
-            height: 40.h,
-            width: 40.w,
-            child: Image.asset(image),
+      height: 55.h,
+      width: 260.w,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16.r),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
-    ),
-  );
-}
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent, // Color is handled by the Ink container
+          shadowColor: Colors.transparent,
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.r),
+          ),
+        ),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1), // Base color
+            gradient: LinearGradient(
+              colors: [color, color.withBlue(255)], // Subtle gradient pop
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+          ),
+          child: Container(
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  text.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                if (image != null) ...[
+                  SizedBox(width: 10.w),
+                  SizedBox(
+                    height: 24.r,
+                    width: 24.r,
+                    child: Image.asset(image, color: Colors.white),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ));
+  }
+
+
 bool emailValidator(String? value) {
   if (value == null || value.isEmpty) {
     return false;
   }
-
-  // Simple regex for basic email format validation
+  // Standard regex for basic email format validation
   final regex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-
   return regex.hasMatch(value);
 }
 
 String getErrorMessage(String errorCode) {
   switch (errorCode) {
     case 'user-not-found':
-      return 'No account found with this email';
+      return 'CREDENTIAL NOT FOUND: Pilot designation unregistered.';
     case 'wrong-password':
-      return 'Incorrect password. Please try again';
+      return 'ENCRYPTION MISMATCH: Invalid passphrase.';
     case 'invalid-email':
-      return 'Please enter a valid email address';
+      return 'INVALID PROTOCOL: Corrupted email format.';
     case 'user-disabled':
-      return 'This account has been disabled';
+      return 'ACCESS DENIED: Pilot account suspended by network admin.';
     case 'too-many-requests':
-      return 'Too many failed attempts. Please try again later';
+      return 'NETWORK LOCKDOWN: Excessive failed attempts. Standby.';
     case 'network-request-failed':
-      return 'Network error. Check your connection';
+      return 'UPLINK FAILED: Check local network connection.';
     case 'invalid-credential':
-      return 'Invalid email or password. Please try again';
+      return 'AUTHENTICATION FAILED: Invalid credentials provided.';
     default:
-      return 'An error occurred. Please try again';
+      return 'SYSTEM ERROR: Operation aborted. Please retry.';
   }
 }
