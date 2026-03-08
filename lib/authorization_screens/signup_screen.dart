@@ -38,15 +38,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1000), // Matched to login screen's smooth boot
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
+      begin: const Offset(0, 0.1),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
@@ -78,8 +78,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
           setState(() {
             isLoading = true;
           });
-          await auth.createUserWithEmailAndPassword(
-              email: email, password: password);
+          await auth.createUserWithEmailAndPassword(email: email, password: password);
           final user = auth.currentUser;
 
           if (user != null) {
@@ -92,104 +91,84 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
               'name': name,
               'createdAt': FieldValue.serverTimestamp(),
             });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.white),
-                    SizedBox(width: 10.w),
-                    Text("Account Created Successfully"),
-                  ],
-                ),
-                backgroundColor: Colors.green,
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 3),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-              ),
-            );
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const MyApp()),
-            );
+
+            if (mounted) {
+              _showSystemSnack("REGISTERED: Access granted", const Color(0xFF00E5FF));
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const MyApp()),
+              );
+            }
           }
         } on FirebaseAuthException catch (e) {
           setState(() {
             isLoading = false;
           });
           String? mess = getErrorMessage(e.code);
-          showError(mess);
+          showError(mess ?? "UNKNOWN AUTHENTICATION ERROR");
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 10.w),
-                Text("Passwords Do not match"),
-              ],
-            ),
-            backgroundColor: Colors.red.shade400,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-          ),
-        );
+        showError("MISMATCH: Passwords do not align");
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.white),
-              SizedBox(width: 10.w),
-              Text("Invalid Email"),
-            ],
-          ),
-          backgroundColor: Colors.red.shade400,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-        ),
-      );
+      showError("INVALID EMAIL: Check email format");
     }
   }
 
   void showError(String message) {
+    _showSystemSnack("ACCESS DENIED: $message", const Color(0xFFFF5252));
+  }
+
+  void _showSystemSnack(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Icon(Icons.error_outline, color: Colors.white),
+            Icon(Icons.terminal_rounded, color: Colors.white, size: 20.r),
             SizedBox(width: 10.w),
-            Expanded(child: Text(message)),
+            Expanded(
+              child: Text(
+                message.toUpperCase(),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.sp, letterSpacing: 1),
+              ),
+            ),
           ],
         ),
-        backgroundColor: Colors.red.shade400,
+        backgroundColor: color.withOpacity(0.95),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        margin: EdgeInsets.all(20.r),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xff6a11cb).withOpacity(0.05),
-              Color(0xff2575fc).withOpacity(0.05),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+      backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFF1A1F3A), // Unified dark auth theme
+      body: buildAuth(isDark),
+    );
+  }
+
+  Widget buildAuth(bool isDark) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          colors: [Color(0xFF1E2447), Color(0xFF0A0E27)],
+          radius: 1.5,
+          center: Alignment.topCenter,
         ),
-        child: Padding(
-          padding: EdgeInsets.all(20.0).r,
-          child: SingleChildScrollView(
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 20.h),
             child: FadeTransition(
               opacity: _fadeAnimation,
               child: SlideTransition(
@@ -197,28 +176,26 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    SizedBox(height: 60.h),
-                    // Logo/Icon Container with Gradient
+                    SizedBox(height: 40.h),
+
+                    // ── LOGO HUD ──────────────────────────────────────────
                     Container(
-                      height: 120.h,
-                      width: 120.w,
+                      height: 100.r,
+                      width: 100.r,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xff6a11cb), Color(0xff2575fc)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        color: const Color(0xFF0A0E27),
+                        border: Border.all(color: const Color(0xFF8B7CFF).withOpacity(0.5), width: 2),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xff2575fc).withOpacity(0.3),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
+                            color: const Color(0xFF8B7CFF).withOpacity(0.3),
+                            blurRadius: 30,
+                            spreadRadius: 5,
                           ),
                         ],
                       ),
                       child: Padding(
-                        padding: EdgeInsets.all(15.r),
+                        padding: EdgeInsets.all(18.r),
                         child: ClipOval(
                           child: Image.asset(
                             'assets/images/raxxy_icon1.png',
@@ -227,334 +204,215 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
                         ),
                       ),
                     ),
-                    SizedBox(height: 30.h),
-                    // Title with Gradient
-                    ShaderMask(
-                      shaderCallback: (bounds) => const LinearGradient(
-                        colors: [Color(0xff6a11cb), Color(0xff2575fc)],
-                      ).createShader(bounds),
-                      child: Text(
-                        'Create Account',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 32.sp,
-                          color: Colors.white,
-                        ),
+                    SizedBox(height: 25.h),
+
+                    // ── TITLE ──────────────────────────────────────────────
+                    Text(
+                      'REGISTRATION',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 26.sp,
+                        color: Colors.white,
+                        letterSpacing: 2,
                       ),
                     ),
                     SizedBox(height: 8.h),
                     Text(
-                      'Sign up to get started',
+                      'Create a New Driver',
                       style: TextStyle(
-                        fontWeight: FontWeight.w400,
-                        fontSize: 16.sp,
-                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13.sp,
+                        color: const Color(0xFF8B7CFF).withOpacity(0.8),
+                        letterSpacing: 0.5,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                     SizedBox(height: 35.h),
 
-                    // Name Field
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(6.0, 0.0, 2.0, 8.0).r,
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.person_outline,
-                              size: 18.r,
-                              color: Color(0xffb2b0ff),
-                            ),
-                            SizedBox(width: 6.w),
-                            Text(
-                              'Name',
-                              style: TextStyle(
-                                fontSize: 14.sp,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xff6a11cb),
-                              ),
-                            ),
-                          ],
-                        ),
+                    // ── AUTHENTICATION CARD ────────────────────────────────
+                    Container(
+                      padding: EdgeInsets.all(24.r),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(30.r),
+                        border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3), width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
                       ),
-                    ),
-                    buildTextField(
-                      context,
-                      nameController,
-                      'Enter your name',
-                          () => setState(() {}),
-                    ),
-                    SizedBox(height: 16.h),
+                      child: Column(
+                        children: [
+                          // Name Field
+                          _buildInputLabel(Icons.badge_outlined, 'NAME'),
+                          SizedBox(height: 8.h),
+                          buildTextField(context, nameController, 'Enter name', () => setState(() {})),
+                          SizedBox(height: 16.h),
 
-                    // Email Field
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(6.0, 0.0, 2.0, 8.0).r,
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.email_outlined,
-                              size: 18.r,
-                              color: Color(0xffb2b0ff),
-                            ),
-                            SizedBox(width: 6.w),
-                            Text(
-                              'Email',
-                              style: TextStyle(
-                                fontSize: 14.sp,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xff6a11cb),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    buildTextField(
-                      context,
-                      emailController,
-                      'someone@example.com',
-                          () => setState(() {}),
-                    ),
-                    SizedBox(height: 16.h),
+                          // Email Field
+                          _buildInputLabel(Icons.fingerprint_rounded, 'EMAIL'),
+                          SizedBox(height: 8.h),
+                          buildTextField(context, emailController, 'someone@example.com', () => setState(() {})),
+                          SizedBox(height: 16.h),
 
-                    // Password Field
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(6.0, 0.0, 2.0, 8.0).r,
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.lock_outline,
-                              size: 18.r,
-                              color: Color(0xffb2b0ff),
-                            ),
-                            SizedBox(width: 6.w),
-                            Text(
-                              'Password',
-                              style: TextStyle(
-                                fontSize: 14.sp,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xff6a11cb),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    buildTextField(
-                      context,
-                      passwordController,
-                      'Create a password',
-                          () => setState(() {
-                        pashid = !pashid;
-                      }),
-                      obscure: pashid,
-                      pass: true,
-                    ),
-                    SizedBox(height: 16.h),
+                          // Password Field
+                          _buildInputLabel(Icons.lock_outline_rounded, 'PASSWORD'),
+                          SizedBox(height: 8.h),
+                          buildTextField(
+                            context,
+                            passwordController,
+                            'Create password',
+                                () => setState(() => pashid = !pashid),
+                            obscure: pashid,
+                            pass: true,
+                          ),
+                          SizedBox(height: 16.h),
 
-                    // Confirm Password Field
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(6.0, 0.0, 2.0, 8.0).r,
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.lock_clock_outlined,
-                              size: 18.r,
-                              color: Color(0xffb2b0ff),
-                            ),
-                            SizedBox(width: 6.w),
-                            Text(
-                              'Confirm Password',
-                              style: TextStyle(
-                                fontSize: 14.sp,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xff6a11cb),
+                          // Confirm Password Field
+                          _buildInputLabel(Icons.verified_user_outlined, 'CONFIRM PASSWORD'),
+                          SizedBox(height: 8.h),
+                          buildTextField(
+                            context,
+                            confirmpasswordController,
+                            'Re-enter password',
+                                () => setState(() => cpashid = !cpashid),
+                            obscure: cpashid,
+                            pass: true,
+                          ),
+                          SizedBox(height: 35.h),
+
+                          // ── SIGNUP BUTTON ──────────────────────────────────
+                          SizedBox(
+                            width: double.infinity,
+                            height: 55.h,
+                            child: isLoading
+                                ? Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00E5FF).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16.r),
+                                border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.5)),
+                              ),
+                              child: const Center(
+                                child: SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Color(0xFF00E5FF),
+                                    strokeWidth: 3,
+                                  ),
+                                ),
+                              ),
+                            )
+                                : ElevatedButton(
+                              onPressed: signup,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+                                elevation: 0,
+                              ),
+                              child: Ink(
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF8B7CFF), Color(0xFF00E5FF)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(16.r),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF00E5FF).withOpacity(0.4),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
+                                ),
+                                child: Container(
+                                  alignment: Alignment.center,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.how_to_reg_rounded, color: Colors.white, size: 20.r),
+                                      SizedBox(width: 10.w),
+                                      Text(
+                                        'REGISTER',
+                                        style: TextStyle(
+                                          fontSize: 13.sp,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.white,
+                                          letterSpacing: 1.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ),
-                    buildTextField(
-                      context,
-                      confirmpasswordController,
-                      'Re-enter password',
-                          () => setState(() {
-                        cpashid = !cpashid;
-                      }),
-                      obscure: cpashid,
-                      pass: true,
                     ),
                     SizedBox(height: 30.h),
 
-                    // Sign Up Button with Loading State
-                    isLoading
-                        ? Container(
-                      height: 50.h,
-                      width: 260.w,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20.r),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xff6a11cb), Color(0xff2575fc)],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xff2575fc).withOpacity(0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 3,
-                        ),
-                      ),
-                    )
-                        : Container(
-                      height: 50.h,
-                      width: 260.w,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20.r),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xff6a11cb), Color(0xff2575fc)],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xff2575fc).withOpacity(0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        onPressed: signup,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20.r),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.how_to_reg_rounded,
-                              color: Colors.white,
-                              size: 24.r,
-                            ),
-                            SizedBox(width: 10.w),
-                            Text(
-                              'Sign Up',
-                              style: TextStyle(
-                                fontSize: 18.sp,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 20.h),
-
-                    // Divider
+                    // ── OR DIVIDER ──────────────────────────────────────────
                     Row(
                       children: [
-                        Expanded(
-                          child: Divider(
-                            color: Colors.grey[400],
-                            thickness: 1,
-                          ),
-                        ),
+                        Expanded(child: Divider(color: const Color(0xFF00E5FF).withOpacity(0.3), thickness: 1)),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 10.w),
+                          padding: EdgeInsets.symmetric(horizontal: 15.w),
                           child: Text(
-                            'OR',
+                            'ALREADY REGISTERED?',
                             style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12.sp,
-                              fontWeight: FontWeight.w500,
+                              color: Colors.white54,
+                              fontSize: 10.sp,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 2,
                             ),
                           ),
                         ),
-                        Expanded(
-                          child: Divider(
-                            color: Colors.grey[400],
-                            thickness: 1,
-                          ),
-                        ),
+                        Expanded(child: Divider(color: const Color(0xFF00E5FF).withOpacity(0.3), thickness: 1)),
                       ],
                     ),
-                    SizedBox(height: 20.h),
+                    SizedBox(height: 30.h),
 
-                    // Login Button
-                    Container(
-                      height: 50.h,
-                      width: 260.w,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20.r),
-                        color: Theme.of(context).cardColor,
-                        border: Border.all(
-                          color: Color(0xffb2b0ff),
-                          width: 2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
+                    // ── LOGIN BUTTON ──────────────────────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55.h,
+                      child: OutlinedButton(
                         onPressed: () {
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(builder: (_) => const LoginScreen()),
                           );
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).cardColor,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20.r),
-                          ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: const Color(0xFF00E5FF).withOpacity(0.5), width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+                          backgroundColor: const Color(0xFF00E5FF).withOpacity(0.05),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.login_rounded,
-                              color: Color(0xff6a11cb),
-                              size: 24.r,
-                            ),
+                            Icon(Icons.login_rounded, color: const Color(0xFF00E5FF), size: 20.r),
                             SizedBox(width: 10.w),
                             Text(
-                              'Already have an account?',
+                              'ALREADY A DRIVER? LOGIN',
                               style: TextStyle(
-                                fontSize: 15.sp,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xff6a11cb),
+                                fontSize: 13.sp,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF00E5FF),
+                                letterSpacing: 1.5,
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                    SizedBox(height: 20.h),
+                    SizedBox(height: 30.h),
                   ],
                 ),
               ),
@@ -562,6 +420,25 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
           ),
         ),
       ),
+    );
+  }
+
+  // --- Helper for Input Labels ---
+  Widget _buildInputLabel(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 16.r, color: const Color(0xFF8B7CFF)),
+        SizedBox(width: 8.w),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 10.sp,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF8B7CFF),
+            letterSpacing: 1.5,
+          ),
+        ),
+      ],
     );
   }
 }
