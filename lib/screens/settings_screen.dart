@@ -43,7 +43,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final username = auth.currentUser?.displayName ?? 'Pilot';
     final themeMode = ref.watch(themeNotifierProvider);
     final crash = ref.watch(featureNotifierProvider);
-    final isDark = themeMode == ThemeMode.dark;
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
     final thresholds = ref.watch(sensorThresholdsProvider);
 
     return Scaffold(
