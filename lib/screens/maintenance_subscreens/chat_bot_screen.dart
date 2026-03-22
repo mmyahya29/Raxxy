@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -54,16 +55,19 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
         elevation: 0,
       ),
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Chat(
-        messages: _messages,
-        onSendPressed: _handleUserMessage,
-        user: _user,
-        theme: DefaultChatTheme(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          primaryColor: Color(0xFF8A3AE1),
-          secondaryColor: Color(0xFFD1D1D1),
-          inputBackgroundColor: Color(0xFF68308A),
-          sendButtonIcon: Icon(Icons.send, color: Theme.of(context).textTheme.bodySmall?.color,)
+      body: Padding(
+        padding: EdgeInsets.only(bottom: 70.r),
+        child: Chat(
+          messages: _messages,
+          onSendPressed: _handleUserMessage,
+          user: _user,
+          theme: DefaultChatTheme(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            primaryColor: Color(0xFF8A3AE1),
+            secondaryColor: Color(0xFFFFFFFF),
+            inputBackgroundColor: Color(0x1F9200EA),
+            sendButtonIcon: Icon(Icons.send, color: Theme.of(context).textTheme.bodySmall?.color,)
+          ),
         ),
       ),
     );
