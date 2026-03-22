@@ -699,25 +699,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _resetThresholds() async {
     await ref.read(sensorThresholdsProvider.notifier).reset();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('✅ Calibration Restored to Factory Settings', style: TextStyle(fontWeight: FontWeight.bold)),
-          backgroundColor: const Color(0xFF4CAF50),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-        ),
+      showAppSnackBar(
+        context,
+        '✅ Calibration Restored to Factory Settings',
+        backgroundColor: const Color(0xFF4CAF50),
       );
     }
   }
 
   void _showStatusSnack(BuildContext context, bool enabled) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(enabled ? '✅ Impact Detection Online' : '⚠️ Impact Detection Offline', style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: enabled ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-      ),
+    showAppSnackBar(
+      context,
+      enabled ? '✅ Impact Detection Online' : '⚠️ Impact Detection Offline',
+      backgroundColor: enabled ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
     );
   }
 
@@ -778,21 +772,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         await userDoc.set({'emergencyContact': phone}, SetOptions(merge: true));
         await prefs.setString('emergency_contact', phone);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: const Text('✅ Protocol Updated'), backgroundColor: const Color(0xFF4CAF50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)), behavior: SnackBarBehavior.floating),
+          showAppSnackBar(
+            context,
+            '✅ Protocol Updated',
+            backgroundColor: const Color(0xFF4CAF50),
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: const Text('❌ System Error: Cannot Update Protocol'), backgroundColor: const Color(0xFFFF5252), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)), behavior: SnackBarBehavior.floating),
+          showAppSnackBar(
+            context,
+            '❌ System Error: Cannot Update Protocol',
+            backgroundColor: const Color(0xFFFF5252),
           );
         }
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('⚠️ Invalid Format: Requires +92XXXXXXXXXX'), backgroundColor: const Color(0xFFFF9800), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)), behavior: SnackBarBehavior.floating),
+        showAppSnackBar(
+          context,
+          '⚠️ Invalid Format: Requires +92XXXXXXXXXX',
+          backgroundColor: const Color(0xFFFF9800),
         );
       }
     }
