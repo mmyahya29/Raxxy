@@ -153,11 +153,11 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
 
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
+    showAppSnackBar(
+      context,
+      msg,
       backgroundColor: isError ? Colors.red : Colors.green,
-      behavior: SnackBarBehavior.floating,
-    ));
+    );
   }
 
   // ── UI ──────────────────────────────────────────────────────

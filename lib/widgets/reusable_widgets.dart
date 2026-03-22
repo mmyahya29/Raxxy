@@ -1,6 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+/// Shows a custom floating [SnackBar] that clears the persistent bottom
+/// navigation bar. Pass [icon] and set [terminalStyle] to `true` to enable
+/// the HUD-style terminal look used on auth screens.
+void showAppSnackBar(
+  BuildContext context,
+  String message, {
+  Color backgroundColor = Colors.black,
+  Duration duration = const Duration(seconds: 3),
+  IconData? icon,
+  bool terminalStyle = false,
+}) {
+  final Widget content = (terminalStyle || icon != null)
+      ? Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: Colors.white, size: 20.r),
+              SizedBox(width: 10.w),
+            ],
+            Expanded(
+              child: Text(
+                terminalStyle ? message.toUpperCase() : message,
+                style: terminalStyle
+                    ? TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12.sp,
+                        letterSpacing: 1,
+                      )
+                    : const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        )
+      : Text(message, style: const TextStyle(fontWeight: FontWeight.bold));
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: content,
+      backgroundColor: backgroundColor.withOpacity(0.95),
+      behavior: SnackBarBehavior.floating,
+      duration: duration,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16.r),
+      ),
+      // Bottom margin is large enough to clear the persistent floating nav bar.
+      margin: EdgeInsets.fromLTRB(16.w, 0, 16.w, 90.h),
+    ),
+  );
+}
+
 Widget buildTextField(
     BuildContext context,
     TextEditingController controller,
