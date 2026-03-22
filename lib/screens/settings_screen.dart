@@ -306,7 +306,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     _buildHudSectionHeader('ACCESS CONTROL', Icons.admin_panel_settings_rounded, const Color(0xFFFF5252), isDark),
                     SizedBox(height: 15.h),
                     _buildLogoutButton(context, auth, isDark),
-                    SizedBox(height: 40.h),
+                    SizedBox(height: 80.h),
                   ],
                 ),
               ),

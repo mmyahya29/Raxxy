@@ -128,93 +128,96 @@ class _LiveDrivingScreenState extends ConsumerState<LiveDrivingScreen>
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFFF4F5F9),
-      body: Stack(
-        children: [
-          // Animated Background
-          Positioned.fill(
-            child: CustomPaint(
-              painter: GridBackgroundPainter(animation: _pulseController),
+      body: Padding(
+        padding: EdgeInsets.only(bottom: 70.r),
+        child: Stack(
+          children: [
+            // Animated Background
+            Positioned.fill(
+              child: CustomPaint(
+                painter: GridBackgroundPainter(animation: _pulseController),
+              ),
             ),
-          ),
 
-          SafeArea(
-            child: Column(
-              children: [
-                _buildTopBar(context),
-                SizedBox(height: 10.h),
+            SafeArea(
+              child: Column(
+                children: [
+                  _buildTopBar(context),
+                  SizedBox(height: 10.h),
 
-                // Vehicle Name
-                Text(
-                  vehicleName.toUpperCase(),
-                  style: TextStyle(
-                    color: const Color(0xFF8B7CFF),
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 4,
+                  // Vehicle Name
+                  Text(
+                    vehicleName.toUpperCase(),
+                    style: TextStyle(
+                      color: const Color(0xFF8B7CFF),
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 4,
+                    ),
                   ),
-                ),
-                SizedBox(height: 20.h),
+                  SizedBox(height: 20.h),
 
-                // Main Speedometer Area (Flexible to take up center space)
-                Expanded(
-                  flex: 5,
-                  child: Center(
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        _buildSmoothSpeedometer(currentSpeed, isDark),
+                  // Main Speedometer Area (Flexible to take up center space)
+                  Expanded(
+                    flex: 5,
+                    child: Center(
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          _buildSmoothSpeedometer(currentSpeed, isDark),
 
-                        // Floating Turn Indicator (Centered inside or above gauge)
-                        Positioned(
-                          top: 0,
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 400),
-                            transitionBuilder: (child, animation) => FadeTransition(
-                              opacity: animation,
-                              child: ScaleTransition(scale: animation, child: child),
+                          // Floating Turn Indicator (Centered inside or above gauge)
+                          Positioned(
+                            top: 0,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 400),
+                              transitionBuilder: (child, animation) => FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(scale: animation, child: child),
+                              ),
+                              child: _currentTurnDirection != "none"
+                                  ? _buildTurnIndicator(_currentTurnDirection)
+                                  : const SizedBox.shrink(),
                             ),
-                            child: _currentTurnDirection != "none"
-                                ? _buildTurnIndicator(_currentTurnDirection)
-                                : const SizedBox.shrink(),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
-                // Warning Banner area (takes up space only when needed)
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  child: (currentSpeed > 100 || gForce.abs() > 1.5)
-                      ? _buildWarningBanner("Check Tire Pressure")
-                      : const SizedBox.shrink(),
-                ),
+                  // Warning Banner area (takes up space only when needed)
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    child: (currentSpeed > 100 || gForce.abs() > 1.5)
+                        ? _buildWarningBanner("Check Tire Pressure")
+                        : const SizedBox.shrink(),
+                  ),
 
-                // Bottom Metrics Area
-                Expanded(
-                  flex: 3,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 25.w),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _buildSmoothAcceleration(currentAcceleration, isDark),
-                        _buildSmoothGForceRadar(gForce, lateralX, lateralY, isDark),
-                      ],
+                  // Bottom Metrics Area
+                  Expanded(
+                    flex: 3,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 25.w),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _buildSmoothAcceleration(currentAcceleration, isDark),
+                          _buildSmoothGForceRadar(gForce, lateralX, lateralY, isDark),
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
-                SizedBox(height: 20.h),
-                _buildRiskIndicator(riskLevel),
-                SizedBox(height: 30.h),
-              ],
+                  SizedBox(height: 20.h),
+                  _buildRiskIndicator(riskLevel),
+                  SizedBox(height: 30.h),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
