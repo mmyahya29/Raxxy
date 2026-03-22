@@ -509,15 +509,19 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
             .delete();
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('✅ ${vehicle['make']} deleted successfully'), backgroundColor: Colors.green),
+          showAppSnackBar(
+            context,
+            '✅ ${vehicle['make']} deleted successfully',
+            backgroundColor: Colors.green,
           );
           setState(() {});
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+          showAppSnackBar(
+            context,
+            '❌ Error: $e',
+            backgroundColor: Colors.red,
           );
         }
       }
@@ -593,7 +597,11 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                     final difference = newMileage - currentMileage;
 
                     if (difference < 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ New mileage cannot be lower than current ($currentMileage km)'), backgroundColor: Colors.orange));
+                      showAppSnackBar(
+                        context,
+                        '⚠️ New mileage cannot be lower than current ($currentMileage km)',
+                        backgroundColor: Colors.orange,
+                      );
                       return;
                     }
                     VehicleMonitorService().stopMonitoring(ref, manualMileage: difference);

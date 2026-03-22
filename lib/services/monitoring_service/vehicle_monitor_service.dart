@@ -16,6 +16,7 @@ import '../../providers/safety_feature_provider.dart';
 import '../../providers/sensor_thresholds_provider.dart';
 import '../notifications_services.dart';
 import 'package:raxxy/services/monitoring_service/feedback_service.dart';
+import '../../widgets/reusable_widgets.dart';
 
 class VehicleMonitorService {
   // ==============================================================================
@@ -724,12 +725,11 @@ class VehicleMonitorService {
 
   void _showSnack(String message, Color color) {
     if (_monitoringContext != null && _monitoringContext!.mounted) {
-      ScaffoldMessenger.of(_monitoringContext!).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: color,
-          duration: const Duration(seconds: 2),
-        ),
+      showAppSnackBar(
+        _monitoringContext!,
+        message,
+        backgroundColor: color,
+        duration: const Duration(seconds: 2),
       );
     }
   }
