@@ -88,26 +88,13 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> with 
   }
 
   void _showSystemSnack(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.terminal_rounded, color: Colors.white, size: 20.r),
-            SizedBox(width: 10.w),
-            Expanded(
-              child: Text(
-                message.toUpperCase(),
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.sp, letterSpacing: 1),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: color.withOpacity(0.95),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-        margin: EdgeInsets.all(20.r),
-      ),
+    showAppSnackBar(
+      context,
+      message,
+      backgroundColor: color,
+      duration: const Duration(seconds: 4),
+      icon: Icons.terminal_rounded,
+      terminalStyle: true,
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../providers/provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../widgets/reusable_widgets.dart';
 
 class ProfileManagement extends ConsumerStatefulWidget {
   const ProfileManagement({super.key});
@@ -362,8 +363,10 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
                 } catch (e) {
                   if (context.mounted) {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: const Color(0xFFFF5252)),
+                    showAppSnackBar(
+                      context,
+                      "Error: ${e.toString()}",
+                      backgroundColor: const Color(0xFFFF5252),
                     );
                   }
                 }
@@ -420,8 +423,10 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Transmission Error: $e"), backgroundColor: const Color(0xFFFF5252)),
+                    showAppSnackBar(
+                      context,
+                      "Transmission Error: $e",
+                      backgroundColor: const Color(0xFFFF5252),
                     );
                   }
                 }
@@ -441,13 +446,10 @@ class _ProfileManagementState extends ConsumerState<ProfileManagement> {
   }
 
   void _showSuccessSnack(String message, Color accentColor) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("✅ $message", style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: accentColor.withOpacity(0.9),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-      ),
+    showAppSnackBar(
+      context,
+      "✅ $message",
+      backgroundColor: accentColor,
     );
   }
 }
