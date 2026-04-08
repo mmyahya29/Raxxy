@@ -9,12 +9,14 @@ import '../providers/goals_provider.dart';
 import '../providers/provider.dart';
 import '../services/maintenance_service.dart';
 import 'dashboard_subscreens/driver_profile_widget.dart';
+import 'dashboard_subscreens/track_management_screen.dart';
 import 'maintenance_subscreens/maintenance_widget.dart';
 import 'dashboard_subscreens/monitor_widget.dart';
 import 'maintenance_subscreens/summary_widget.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   final PersistentTabController controller;
+
   const DashboardScreen({super.key, required this.controller});
 
   @override
@@ -25,12 +27,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeNotifierProvider);
-    final isDark = themeMode == ThemeMode.dark ||
+    final isDark =
+        themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system &&
             MediaQuery.of(context).platformBrightness == Brightness.dark);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFFF4F5F9),
+      backgroundColor:
+          isDark ? const Color(0xFF0A0E27) : const Color(0xFFF4F5F9),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -51,25 +55,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     SizedBox(height: 25.h),
 
                     // --- MONITOR SECTION ---
-                    _buildHudSectionHeader('ACTIVE TELEMETRY', Icons.sensors_rounded, const Color(0xFF00E5FF), isDark),
+                    _buildHudSectionHeader(
+                      'ACTIVE TELEMETRY',
+                      Icons.sensors_rounded,
+                      const Color(0xFF00E5FF),
+                      isDark,
+                    ),
                     SizedBox(height: 15.h),
                     monitorWidget(context, widget),
 
                     SizedBox(height: 30.h),
 
                     // --- DRIVER PROFILE ---
-                    _buildHudSectionHeader('PILOT METRICS', Icons.psychology_rounded, const Color(0xFF8B7CFF), isDark),
+                    _buildHudSectionHeader(
+                      'PILOT METRICS',
+                      Icons.psychology_rounded,
+                      const Color(0xFF8B7CFF),
+                      isDark,
+                    ),
                     SizedBox(height: 15.h),
                     driverProfileWidget(context),
 
                     SizedBox(height: 30.h),
 
                     // --- ACTIVE GOALS ---
-                    _buildHudSectionHeader('ACTIVE DIRECTIVES', Icons.track_changes_rounded, const Color(0xFFFF9800), isDark),
+                    _buildHudSectionHeader(
+                      'ACTIVE DIRECTIVES',
+                      Icons.track_changes_rounded,
+                      const Color(0xFFFF9800),
+                      isDark,
+                    ),
                     SizedBox(height: 15.h),
                     goalsWidget(context, () => setState(() {})),
 
-                    SizedBox(height: 40.h), // Bottom padding for nav bar clearance
+                    SizedBox(height: 40.h),
+                    // Bottom padding for nav bar clearance
                   ],
                 ),
               ),
@@ -112,17 +132,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ],
           ),
-          Container(
-            padding: EdgeInsets.all(10.r),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
-              shape: BoxShape.circle,
-              border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
-            ),
-            child: Icon(
-              Icons.notifications_none_rounded,
-              color: isDark ? Colors.white70 : Colors.black87,
-              size: 24.r,
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => TrackManagementScreen()),
+              );
+            },
+            child: Container(
+              padding: EdgeInsets.all(10.r),
+              decoration: BoxDecoration(
+                color:
+                    isDark
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.black.withOpacity(0.05),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark ? Colors.white10 : Colors.black12,
+                ),
+              ),
+              child: Icon(
+                Icons.edit_road_rounded,
+                color: isDark ? Colors.white70 : Colors.black87,
+                size: 24.r,
+              ),
             ),
           ),
         ],
@@ -175,7 +208,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           letterSpacing: 1.5,
                         ),
                       ),
-                      Icon(Icons.shield_rounded, color: Colors.white.withOpacity(0.9), size: 20.r),
+                      Icon(
+                        Icons.shield_rounded,
+                        color: Colors.white.withOpacity(0.9),
+                        size: 20.r,
+                      ),
                     ],
                   ),
                   SizedBox(height: 12.h),
@@ -212,11 +249,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                       const Spacer(),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12.w,
+                          vertical: 6.h,
+                        ),
                         decoration: BoxDecoration(
                           color: statusColor.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(20.r),
-                          border: Border.all(color: statusColor.withOpacity(0.5), width: 1.5),
+                          border: Border.all(
+                            color: statusColor.withOpacity(0.5),
+                            width: 1.5,
+                          ),
                         ),
                         child: Text(
                           _getScoreLabel(safeScore),
@@ -239,13 +282,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       color: Colors.black.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(10.r),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4),
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                        ),
                       ],
                     ),
                     child: Stack(
                       children: [
                         TweenAnimationBuilder<double>(
-                          tween: Tween<double>(begin: 0, end: (safeScore / 100).clamp(0.0, 1.0)),
+                          tween: Tween<double>(
+                            begin: 0,
+                            end: (safeScore / 100).clamp(0.0, 1.0),
+                          ),
                           duration: const Duration(milliseconds: 1500),
                           curve: Curves.easeOutCubic,
                           builder: (context, value, child) {
@@ -256,7 +305,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   color: statusColor,
                                   borderRadius: BorderRadius.circular(10.r),
                                   boxShadow: [
-                                    BoxShadow(color: statusColor.withOpacity(0.8), blurRadius: 8, spreadRadius: 1),
+                                    BoxShadow(
+                                      color: statusColor.withOpacity(0.8),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -269,23 +322,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ],
               );
             },
-            loading: () => SizedBox(
-              height: 120.h,
-              child: const Center(child: CircularProgressIndicator(color: Colors.white)),
-            ),
-            error: (e, _) => SizedBox(
-              height: 120.h,
-              child: Center(
-                child: Text("TELEMETRY ERROR\n$e", textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-              ),
-            ),
+            loading:
+                () => SizedBox(
+                  height: 120.h,
+                  child: const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                ),
+            error:
+                (e, _) => SizedBox(
+                  height: 120.h,
+                  child: Center(
+                    child: Text(
+                      "TELEMETRY ERROR\n$e",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
           );
         },
       ),
     );
   }
 
-  Widget _buildHudSectionHeader(String title, IconData icon, Color accentColor, bool isDark) {
+  Widget _buildHudSectionHeader(
+    String title,
+    IconData icon,
+    Color accentColor,
+    bool isDark,
+  ) {
     return Row(
       children: [
         Icon(icon, size: 18.r, color: accentColor),
