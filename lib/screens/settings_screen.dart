@@ -66,7 +66,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   children: [
                     SizedBox(height: 10.h),
 
-                    // ── PROFILE HEADER ──────────────────────────────
+                    // ── PROFILE HEADER ────────────────────────���─────
                     _buildProfileHeader(context, username, isDark),
                     SizedBox(height: 35.h),
 
@@ -129,7 +129,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     // Module: Acceleration & Braking
                     _buildCalibrationModule(
                       context,
-                      'ACCELERATION & BRAKING',
+                      'ACCELERATION & BRAKING (JERK)',
                       Icons.speed_rounded,
                       const Color(0xFFFF9800),
                       isDark,
@@ -141,10 +141,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           onChanged: (v) => _updateThresholds(thresholds.copyWith(minSpeedThresholdKmh: v)),
                         ),
                         _buildSliderTile(
-                          context: context, title: 'Harsh Event Threshold', subtitle: 'G-force needed to trigger',
-                          value: thresholds.accelerationThreshold, defaultValue: SensorThresholdDefaults.accelerationThreshold,
-                          min: 0.5, max: 6.0, divisions: 55, unit: 'm/s²', isDark: isDark,
-                          onChanged: (v) => _updateThresholds(thresholds.copyWith(accelerationThreshold: v)),
+                          context: context, title: 'Harsh Event Threshold', subtitle: 'Jerk SD needed to trigger',
+                          value: thresholds.jerkStdDevThreshold, defaultValue: SensorThresholdDefaults.jerkStdDevThreshold,
+                          min: 0.5, max: 6.0, divisions: 55, unit: 'm/s³', isDark: isDark,
+                          onChanged: (v) => _updateThresholds(thresholds.copyWith(jerkStdDevThreshold: v)),
                         ),
                         _buildSliderTile(
                           context: context, title: 'Noise Filter', subtitle: 'Max std deviation before discarding',
@@ -159,16 +159,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     // Module: Turn Detection
                     _buildCalibrationModule(
                       context,
-                      'LATERAL DETECTION',
+                      'LATERAL DETECTION (YAW)',
                       Icons.turn_right_rounded,
                       const Color(0xFF00E5FF),
                       isDark,
                       [
                         _buildSliderTile(
-                          context: context, title: 'Lateral Force Limit', subtitle: 'Force to begin turn detection',
-                          value: thresholds.turnForceThreshold, defaultValue: SensorThresholdDefaults.turnForceThreshold,
-                          min: 0.5, max: 5.0, divisions: 45, unit: 'm/s²', isDark: isDark,
-                          onChanged: (v) => _updateThresholds(thresholds.copyWith(turnForceThreshold: v)),
+                          context: context, title: 'Yaw Rate Limit', subtitle: 'Rate to begin turn detection',
+                          value: thresholds.yawRateThreshold, defaultValue: SensorThresholdDefaults.yawRateThreshold,
+                          min: 0.1, max: 2.0, divisions: 38, unit: 'rad/s', isDark: isDark,
+                          onChanged: (v) => _updateThresholds(thresholds.copyWith(yawRateThreshold: v)),
                         ),
                         _buildSliderTile(
                           context: context, title: 'Sustain Duration', subtitle: 'Time force must persist',

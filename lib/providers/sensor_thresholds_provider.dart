@@ -8,19 +8,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 // ============================================================
 class SensorThresholdDefaults {
   static const double minSpeedThresholdKmh        = 0.0;   // _kMinSpeedThresholdKmh
-  static const double accelerationThreshold        = 1.8;   // _kAccelerationThreshold
-  static const double jitterThreshold              = 2.0;   // _kJitterThreshold
-  static const double turnForceThreshold           = 1.5;   // _kTurnForceThreshold
-  static const int    turnDurationMs               = 500;   // _kTurnDurationMs
-  static const double gyroRotationThreshold        = 0.3;   // _kGyroRotationThreshold
-  static const double smoothTurnLimit              = 3.0;   // _kSmoothTurnLimit
-  static const double jerkyTurnLimit               = 5.0;   // _kJerkyTurnLimit
-  static const double significantSpeedDrop         = 12.0;  // _kSignificantSpeedDrop
-  static const double crashAccelFluctuationLimit   = 1.0;   // _kCrashAccelFluctuationLimit
-  static const double crashSpeedDropLimit          = 15.0;  // _kCrashSpeedDropLimit (positive; applied as negative)
-  static const int    notificationCooldownSeconds  = 3;     // _kNotificationCooldown
-  static const int    turnCooldownSeconds          = 1;     // _kTurnCooldown
-  static const int    crashCooldownSeconds         = 10;    // _kCrashCooldown
+  static const double accelerationThreshold       = 1.8;   // _kAccelerationThreshold
+  static const double jitterThreshold             = 2.0;   // _kJitterThreshold
+  static const double turnForceThreshold          = 1.5;   // _kTurnForceThreshold
+  static const int    turnDurationMs              = 500;   // _kTurnDurationMs
+  static const double gyroRotationThreshold       = 0.3;   // _kGyroRotationThreshold
+  static const double smoothTurnLimit             = 3.0;   // _kSmoothTurnLimit
+  static const double jerkyTurnLimit              = 5.0;   // _kJerkyTurnLimit
+  static const double significantSpeedDrop        = 12.0;  // _kSignificantSpeedDrop
+  static const double crashAccelFluctuationLimit  = 1.0;   // _kCrashAccelFluctuationLimit
+  static const double crashSpeedDropLimit         = 15.0;  // _kCrashSpeedDropLimit (positive; applied as negative)
+  static const int    notificationCooldownSeconds = 3;     // _kNotificationCooldown
+  static const int    turnCooldownSeconds         = 1;     // _kTurnCooldown
+  static const int    crashCooldownSeconds        = 10;    // _kCrashCooldown
+
+  // NEW SENSEFLEET THRESHOLDS
+  static const double jerkStdDevThreshold         = 2.5;   // Jerk SD for longitudinal events (m/s³)
+  static const double yawRateThreshold            = 0.5;   // Yaw Rate for lateral events (rad/s)
 }
 
 // ============================================================
@@ -42,21 +46,26 @@ class SensorThresholds {
   final int    turnCooldownSeconds;
   final int    crashCooldownSeconds;
 
+  final double jerkStdDevThreshold;
+  final double yawRateThreshold;
+
   const SensorThresholds({
-    this.minSpeedThresholdKmh       = SensorThresholdDefaults.minSpeedThresholdKmh,
-    this.accelerationThreshold      = SensorThresholdDefaults.accelerationThreshold,
-    this.jitterThreshold            = SensorThresholdDefaults.jitterThreshold,
-    this.turnForceThreshold         = SensorThresholdDefaults.turnForceThreshold,
-    this.turnDurationMs             = SensorThresholdDefaults.turnDurationMs,
-    this.gyroRotationThreshold      = SensorThresholdDefaults.gyroRotationThreshold,
-    this.smoothTurnLimit            = SensorThresholdDefaults.smoothTurnLimit,
-    this.jerkyTurnLimit             = SensorThresholdDefaults.jerkyTurnLimit,
-    this.significantSpeedDrop       = SensorThresholdDefaults.significantSpeedDrop,
-    this.crashAccelFluctuationLimit = SensorThresholdDefaults.crashAccelFluctuationLimit,
-    this.crashSpeedDropLimit        = SensorThresholdDefaults.crashSpeedDropLimit,
+    this.minSpeedThresholdKmh        = SensorThresholdDefaults.minSpeedThresholdKmh,
+    this.accelerationThreshold       = SensorThresholdDefaults.accelerationThreshold,
+    this.jitterThreshold             = SensorThresholdDefaults.jitterThreshold,
+    this.turnForceThreshold          = SensorThresholdDefaults.turnForceThreshold,
+    this.turnDurationMs              = SensorThresholdDefaults.turnDurationMs,
+    this.gyroRotationThreshold       = SensorThresholdDefaults.gyroRotationThreshold,
+    this.smoothTurnLimit             = SensorThresholdDefaults.smoothTurnLimit,
+    this.jerkyTurnLimit              = SensorThresholdDefaults.jerkyTurnLimit,
+    this.significantSpeedDrop        = SensorThresholdDefaults.significantSpeedDrop,
+    this.crashAccelFluctuationLimit  = SensorThresholdDefaults.crashAccelFluctuationLimit,
+    this.crashSpeedDropLimit         = SensorThresholdDefaults.crashSpeedDropLimit,
     this.notificationCooldownSeconds = SensorThresholdDefaults.notificationCooldownSeconds,
-    this.turnCooldownSeconds        = SensorThresholdDefaults.turnCooldownSeconds,
-    this.crashCooldownSeconds       = SensorThresholdDefaults.crashCooldownSeconds,
+    this.turnCooldownSeconds         = SensorThresholdDefaults.turnCooldownSeconds,
+    this.crashCooldownSeconds        = SensorThresholdDefaults.crashCooldownSeconds,
+    this.jerkStdDevThreshold         = SensorThresholdDefaults.jerkStdDevThreshold,
+    this.yawRateThreshold            = SensorThresholdDefaults.yawRateThreshold,
   });
 
   SensorThresholds copyWith({
@@ -74,22 +83,26 @@ class SensorThresholds {
     int?    notificationCooldownSeconds,
     int?    turnCooldownSeconds,
     int?    crashCooldownSeconds,
+    double? jerkStdDevThreshold,
+    double? yawRateThreshold,
   }) {
     return SensorThresholds(
       minSpeedThresholdKmh:        minSpeedThresholdKmh        ?? this.minSpeedThresholdKmh,
-      accelerationThreshold:       accelerationThreshold        ?? this.accelerationThreshold,
-      jitterThreshold:             jitterThreshold              ?? this.jitterThreshold,
-      turnForceThreshold:          turnForceThreshold           ?? this.turnForceThreshold,
-      turnDurationMs:              turnDurationMs               ?? this.turnDurationMs,
-      gyroRotationThreshold:       gyroRotationThreshold        ?? this.gyroRotationThreshold,
-      smoothTurnLimit:             smoothTurnLimit              ?? this.smoothTurnLimit,
-      jerkyTurnLimit:              jerkyTurnLimit               ?? this.jerkyTurnLimit,
-      significantSpeedDrop:        significantSpeedDrop         ?? this.significantSpeedDrop,
-      crashAccelFluctuationLimit:  crashAccelFluctuationLimit   ?? this.crashAccelFluctuationLimit,
-      crashSpeedDropLimit:         crashSpeedDropLimit          ?? this.crashSpeedDropLimit,
-      notificationCooldownSeconds: notificationCooldownSeconds  ?? this.notificationCooldownSeconds,
-      turnCooldownSeconds:         turnCooldownSeconds          ?? this.turnCooldownSeconds,
-      crashCooldownSeconds:        crashCooldownSeconds         ?? this.crashCooldownSeconds,
+      accelerationThreshold:       accelerationThreshold       ?? this.accelerationThreshold,
+      jitterThreshold:             jitterThreshold             ?? this.jitterThreshold,
+      turnForceThreshold:          turnForceThreshold          ?? this.turnForceThreshold,
+      turnDurationMs:              turnDurationMs              ?? this.turnDurationMs,
+      gyroRotationThreshold:       gyroRotationThreshold       ?? this.gyroRotationThreshold,
+      smoothTurnLimit:             smoothTurnLimit             ?? this.smoothTurnLimit,
+      jerkyTurnLimit:              jerkyTurnLimit              ?? this.jerkyTurnLimit,
+      significantSpeedDrop:        significantSpeedDrop        ?? this.significantSpeedDrop,
+      crashAccelFluctuationLimit:  crashAccelFluctuationLimit  ?? this.crashAccelFluctuationLimit,
+      crashSpeedDropLimit:         crashSpeedDropLimit         ?? this.crashSpeedDropLimit,
+      notificationCooldownSeconds: notificationCooldownSeconds ?? this.notificationCooldownSeconds,
+      turnCooldownSeconds:         turnCooldownSeconds         ?? this.turnCooldownSeconds,
+      crashCooldownSeconds:        crashCooldownSeconds        ?? this.crashCooldownSeconds,
+      jerkStdDevThreshold:         jerkStdDevThreshold         ?? this.jerkStdDevThreshold,
+      yawRateThreshold:            yawRateThreshold            ?? this.yawRateThreshold,
     );
   }
 }
@@ -118,24 +131,30 @@ class SensorThresholdsNotifier extends StateNotifier<SensorThresholds> {
   static const _kTurnCooldown   = 'thresh_turn_cooldown';
   static const _kCrashCooldown  = 'thresh_crash_cooldown';
 
+  // New keys
+  static const _kJerkStdDev     = 'thresh_jerk_std_dev';
+  static const _kYawRate        = 'thresh_yaw_rate';
+
   /// Load persisted values, falling back to defaults from [SensorThresholdDefaults]
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     state = SensorThresholds(
-      minSpeedThresholdKmh:        prefs.getDouble(_kMinSpeed)     ?? SensorThresholdDefaults.minSpeedThresholdKmh,
-      accelerationThreshold:       prefs.getDouble(_kAccel)        ?? SensorThresholdDefaults.accelerationThreshold,
-      jitterThreshold:             prefs.getDouble(_kJitter)       ?? SensorThresholdDefaults.jitterThreshold,
-      turnForceThreshold:          prefs.getDouble(_kTurnForce)    ?? SensorThresholdDefaults.turnForceThreshold,
-      turnDurationMs:              prefs.getInt(_kTurnDuration)    ?? SensorThresholdDefaults.turnDurationMs,
-      gyroRotationThreshold:       prefs.getDouble(_kGyro)         ?? SensorThresholdDefaults.gyroRotationThreshold,
-      smoothTurnLimit:             prefs.getDouble(_kSmoothTurn)   ?? SensorThresholdDefaults.smoothTurnLimit,
-      jerkyTurnLimit:              prefs.getDouble(_kJerkyTurn)    ?? SensorThresholdDefaults.jerkyTurnLimit,
-      significantSpeedDrop:        prefs.getDouble(_kSpeedDrop)    ?? SensorThresholdDefaults.significantSpeedDrop,
-      crashAccelFluctuationLimit:  prefs.getDouble(_kCrashAccel)   ?? SensorThresholdDefaults.crashAccelFluctuationLimit,
-      crashSpeedDropLimit:         prefs.getDouble(_kCrashSpeed)   ?? SensorThresholdDefaults.crashSpeedDropLimit,
-      notificationCooldownSeconds: prefs.getInt(_kNotifCooldown)   ?? SensorThresholdDefaults.notificationCooldownSeconds,
-      turnCooldownSeconds:         prefs.getInt(_kTurnCooldown)    ?? SensorThresholdDefaults.turnCooldownSeconds,
-      crashCooldownSeconds:        prefs.getInt(_kCrashCooldown)   ?? SensorThresholdDefaults.crashCooldownSeconds,
+      minSpeedThresholdKmh:        prefs.getDouble(_kMinSpeed)       ?? SensorThresholdDefaults.minSpeedThresholdKmh,
+      accelerationThreshold:       prefs.getDouble(_kAccel)          ?? SensorThresholdDefaults.accelerationThreshold,
+      jitterThreshold:             prefs.getDouble(_kJitter)         ?? SensorThresholdDefaults.jitterThreshold,
+      turnForceThreshold:          prefs.getDouble(_kTurnForce)      ?? SensorThresholdDefaults.turnForceThreshold,
+      turnDurationMs:              prefs.getInt(_kTurnDuration)      ?? SensorThresholdDefaults.turnDurationMs,
+      gyroRotationThreshold:       prefs.getDouble(_kGyro)           ?? SensorThresholdDefaults.gyroRotationThreshold,
+      smoothTurnLimit:             prefs.getDouble(_kSmoothTurn)     ?? SensorThresholdDefaults.smoothTurnLimit,
+      jerkyTurnLimit:              prefs.getDouble(_kJerkyTurn)      ?? SensorThresholdDefaults.jerkyTurnLimit,
+      significantSpeedDrop:        prefs.getDouble(_kSpeedDrop)      ?? SensorThresholdDefaults.significantSpeedDrop,
+      crashAccelFluctuationLimit:  prefs.getDouble(_kCrashAccel)     ?? SensorThresholdDefaults.crashAccelFluctuationLimit,
+      crashSpeedDropLimit:         prefs.getDouble(_kCrashSpeed)     ?? SensorThresholdDefaults.crashSpeedDropLimit,
+      notificationCooldownSeconds: prefs.getInt(_kNotifCooldown)     ?? SensorThresholdDefaults.notificationCooldownSeconds,
+      turnCooldownSeconds:         prefs.getInt(_kTurnCooldown)      ?? SensorThresholdDefaults.turnCooldownSeconds,
+      crashCooldownSeconds:        prefs.getInt(_kCrashCooldown)     ?? SensorThresholdDefaults.crashCooldownSeconds,
+      jerkStdDevThreshold:         prefs.getDouble(_kJerkStdDev)     ?? SensorThresholdDefaults.jerkStdDevThreshold,
+      yawRateThreshold:            prefs.getDouble(_kYawRate)        ?? SensorThresholdDefaults.yawRateThreshold,
     );
   }
 
@@ -155,6 +174,10 @@ class SensorThresholdsNotifier extends StateNotifier<SensorThresholds> {
     await prefs.setInt   (_kNotifCooldown, state.notificationCooldownSeconds);
     await prefs.setInt   (_kTurnCooldown,  state.turnCooldownSeconds);
     await prefs.setInt   (_kCrashCooldown, state.crashCooldownSeconds);
+
+    // Persist new thresholds
+    await prefs.setDouble(_kJerkStdDev,    state.jerkStdDevThreshold);
+    await prefs.setDouble(_kYawRate,       state.yawRateThreshold);
   }
 
   /// Update thresholds and persist to SharedPreferences

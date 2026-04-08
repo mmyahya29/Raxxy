@@ -59,9 +59,9 @@ class FeedbackService {
   String? _currentUserId;
 
   // Default thresholds (overwritten after history is loaded)
-  double _avgTurnForce = 2.0;
-  double _avgAccel = 2.0;
-  double _avgBrake = 2.0;
+  double _avgYawRate = 0.5;   // rad/s
+  double _avgJerk = 2.5;      // m/s³
+  double _avgBrakeJerk = 2.5; // m/s³
 
   // Historical profile data
   DriverProfile? _driverProfile;
@@ -110,26 +110,26 @@ class FeedbackService {
         (session['metrics']['avgHarshEventsPerMin'] ?? 0.0).toDouble();
 
         if (harshRate > 0.5) {
-          totalAccel += 2.5;
-          totalBrake += 2.5;
+          totalAccel += 3.5; // Higher jerk tolerance for aggressive drivers
+          totalBrake += 3.5;
         } else {
-          totalAccel += 1.8;
-          totalBrake += 1.8;
+          totalAccel += 2.5; // Tighter jerk tolerance for smooth drivers
+          totalBrake += 2.5;
         }
         count++;
       }
     }
 
     if (count > 0) {
-      _avgAccel = totalAccel / count;
-      _avgBrake = totalBrake / count;
-      _avgTurnForce = 2.0;
+      _avgJerk = totalAccel / count;
+      _avgBrakeJerk = totalBrake / count;
+      _avgYawRate = 0.5;
     }
 
     debugPrint(
       '📊 Customized Thresholds -> '
-          'Accel: ${_avgAccel.toStringAsFixed(2)}, '
-          'Brake: ${_avgBrake.toStringAsFixed(2)}',
+          'Jerk: ${_avgJerk.toStringAsFixed(2)} m/s³, '
+          'Brake Jerk: ${_avgBrakeJerk.toStringAsFixed(2)} m/s³',
     );
   }
 
@@ -286,13 +286,13 @@ class FeedbackService {
   // ✅ FIX: All evaluate methods now properly await _emitFeedback() so the
   //    async TTS chain (triggerFeedback inside _emitFeedback) is not orphaned.
 
-  Future<void> evaluateTurn(double lateralForce, double speedKmh) async {
-    if (lateralForce.abs() < _avgTurnForce * 1.2) return;
+  Future<void> evaluateTurn(double yawRate, double speedKmh) async {
+    if (yawRate.abs() < _avgYawRate * 1.2) return;
     if (!_canTrigger(_lastTurnFeedback)) return;
 
     _lastTurnFeedback = DateTime.now();
 
-    final severity = (lateralForce.abs() / 5.0).clamp(0.0, 1.0);
+    final severity = (yawRate.abs() / 1.5).clamp(0.0, 1.0);
     final String msg =
     speedKmh > 50 ? 'Taking that turn a bit fast!' : 'Sharp turn detected.';
     final String recommendation =
@@ -307,13 +307,13 @@ class FeedbackService {
     );
   }
 
-  Future<void> evaluateAcceleration(double magnitude, double speedKmh) async {
-    if (magnitude < _avgAccel * 1.2) return;
+  Future<void> evaluateAcceleration(double jerkStdDev, double speedKmh) async {
+    if (jerkStdDev < _avgJerk * 1.2) return;
     if (!_canTrigger(_lastAccelFeedback)) return;
 
     _lastAccelFeedback = DateTime.now();
 
-    final severity = (magnitude / 5.0).clamp(0.0, 1.0);
+    final severity = (jerkStdDev / 6.0).clamp(0.0, 1.0);
     final String recommendation =
     _getPersonalizedRecommendation(FeedbackCategory.throttling, severity);
 
@@ -326,13 +326,13 @@ class FeedbackService {
     );
   }
 
-  Future<void> evaluateBraking(double magnitude, double speedKmh) async {
-    if (magnitude < _avgBrake * 1.2) return;
+  Future<void> evaluateBraking(double jerkStdDev, double speedKmh) async {
+    if (jerkStdDev < _avgBrakeJerk * 1.2) return;
     if (!_canTrigger(_lastBrakeFeedback)) return;
 
     _lastBrakeFeedback = DateTime.now();
 
-    final severity = (magnitude / 5.0).clamp(0.0, 1.0);
+    final severity = (jerkStdDev / 6.0).clamp(0.0, 1.0);
     final String recommendation =
     _getPersonalizedRecommendation(FeedbackCategory.braking, severity);
 
