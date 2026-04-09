@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../providers/provider.dart';
 import '../../services/racing_telemetary_core.dart';
+import '../../widgets/reusable_widgets.dart';
 
 enum MappingState { idle, mappingLeft, mappingRight, processing }
 
@@ -54,15 +55,21 @@ class _TrackMappingScreenState extends ConsumerState<TrackMappingScreen> {
 
   Future<void> _processAndSaveTrack() async {
     if (_leftBoundaryRaw.length < 4 || _rightBoundaryRaw.length < 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please map more points for a valid track.')),
+      showAppSnackBar(
+        context,
+        'Please map more points for a valid track.',
+        backgroundColor: Colors.pink,
+        terminalStyle: false,
       );
       return;
     }
 
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please name the track first.')),
+      showAppSnackBar(
+        context,
+        'Please name the track first.',
+        backgroundColor: Colors.pink,
+        terminalStyle: false,
       );
       return;
     }

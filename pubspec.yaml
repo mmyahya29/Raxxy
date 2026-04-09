@@ -70,6 +70,7 @@ dependencies:
   wakelock_plus: ^1.4.0
   flutter_dotenv: ^6.0.0
   flutter_tts: ^4.2.5
+  ml_linalg: ^13.12.7
 
 
 
