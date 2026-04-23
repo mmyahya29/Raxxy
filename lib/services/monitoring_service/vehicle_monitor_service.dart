@@ -18,7 +18,9 @@ import '../../providers/sensor_thresholds_provider.dart';
 import '../notifications_services.dart';
 import 'package:raxxy/services/monitoring_service/feedback_service.dart';
 import '../../widgets/reusable_widgets.dart';
-import '../racing_telemetary_core.dart';
+
+// Import the new Racing Telemetry Service
+import 'package:raxxy/services/racing_telemetary_core.dart';
 
 // Helper classes for sliding windows
 class TimeStampedValue {
@@ -30,22 +32,44 @@ class TimeStampedValue {
 class VehicleMonitorService {
   // ==============================================================================
   // 🔧 RUNTIME THRESHOLDS
+  // Loaded from SensorThresholdsProvider when startMonitoring() is called.
+  // Defaults match the original hardcoded constants exactly.
   // ==============================================================================
   late SensorThresholds _t;
 
+  // NEW: Dynamic Multipliers from DriverProfileService
+  double _jerkMultiplier = 1.0;
+  double _yawMultiplier = 1.0;
+
+  // Fixed internal constant — LPF smoothing, not user-configurable
   static const double _kLpfAlpha = 0.15;
+
+  // UI Specific LPF (Heavy smoothing to cancel engine vibration before math)
+  static const double _kLpfAlphaUi = 0.05;
+  double _uiLpfX = 0.0;
+  double _uiLpfY = 0.0;
+  double _uiLpfZ = 0.0;
+  double _smoothedUiAcceleration = 0.0;
+
+  // Minimum GPS speed (km/h) below which direction-reversal logic is skipped.
   static const double _kMinSpeedForReversalKmh = 3.0;
+
+  // Number of consecutive samples the reversal angle must persist before we
+  // commit to _isDecelerating = true.  Prevents single-spike false positives.
   static const int _kReversalHysteresisCount = 3;
 
   // ==================== STATE ====================
   bool _isTrackMode = false;
   final RacingTelemetryService _telemetryService = RacingTelemetryService();
+  RacingTelemetryService get telemetry => _telemetryService;
 
   // ==================== ACCIDENT RISK ====================
   double _currentRiskScore = 0;
   String _currentRiskLevel = 'Low';
   DateTime? _lastRiskAlert;
   static const Duration _kRiskCooldown = Duration(seconds: 8);
+
+  // ==============================================================================
 
   final ValueNotifier<String?> monitoredVehicleIdNotifier = ValueNotifier(null);
   final ValueNotifier<double>  currentSpeedNotifier        = ValueNotifier(0.0);
@@ -85,6 +109,7 @@ class VehicleMonitorService {
   double?   _lastMagnitude;
   DateTime? _lastAccelTimestamp;
 
+  // Need to hold onto absolute accel buffers for crash detection
   final List<double> _rawAccelMagnitudes = [];
   final int sustainedSampleCount = 1;
 
@@ -105,7 +130,7 @@ class VehicleMonitorService {
   List<String> _activeTriggers            = [];
   int          _lowSpeedCounter           = 0;
 
-  // ==================== TURN DETECTION ====================
+  // ==================== TURN DETECTION (YAW RATE) ====================
   final Queue<TimeStampedValue> _yawRateBuffer = Queue();
   double?   _lastYaw;
   DateTime? _lastYawTimestamp;
@@ -124,6 +149,7 @@ class VehicleMonitorService {
   double? _lastDirectionZ;
   bool    _isDecelerating = false;
 
+  // Hysteresis counter
   int _reversalConfirmCount = 0;
 
   final double magnitudeSettledThreshold  = 0.5;
@@ -139,7 +165,7 @@ class VehicleMonitorService {
     required String       make,
     required String       model,
     required WidgetRef    ref,
-    bool                  trackMode = false, // Inject Track Mode flag
+    bool                  trackMode = false,
   }) async {
     _t = ref.read(sensorThresholdsProvider);
     _isTrackMode = trackMode;
@@ -152,6 +178,14 @@ class VehicleMonitorService {
     _activeTriggers            = [];
     _lowSpeedCounter           = 0;
 
+    // Reset multipliers & UI smoothing to baseline
+    _jerkMultiplier = 1.0;
+    _yawMultiplier = 1.0;
+    _uiLpfX = 0.0;
+    _uiLpfY = 0.0;
+    _uiLpfZ = 0.0;
+    _smoothedUiAcceleration = 0.0;
+
     if (_isMonitoring) return;
     _isMonitoring      = true;
     _userId            = userId;
@@ -159,6 +193,7 @@ class VehicleMonitorService {
     _monitoringContext = context;
 
     _sessionService.startSession();
+    _telemetryService.reset(); // Reset telemetry engine
     _lastCrashDetection    = null;
     _consecutiveHarshAccel = 0;
     _consecutiveHarshBrake = 0;
@@ -186,6 +221,9 @@ class VehicleMonitorService {
     debugPrint('RAXXY: Monitoring service started. Track Mode: $_isTrackMode');
 
     _checkStressTriggers(userId);
+    if (!_isTrackMode) {
+      _fetchDynamicThresholdModifiers(userId); // Fetch personalized thresholds only in normal mode
+    }
 
     try {
       await WakelockPlus.enable();
@@ -199,104 +237,22 @@ class VehicleMonitorService {
       _feedbackService.evaluateWeather(ref);
     }
 
-    // ==================== UI UPDATE TIMER ====================
+    // UI update timer (500 ms) - Heavy math stays here to prevent stuttering
     _uiUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      // Common updates for both modes
-      ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
-      ref.read(vehicleMonitorProvider.notifier).updateDistance(totalDistanceMeters);
-      _sessionService.updateSpeed(currentSpeedKmh);
 
       if (!_isTrackMode) {
-        // CITY NANNY LOGIC
-        if (_jerkBuffer.isNotEmpty) {
-          final avgJerk = _jerkBuffer.map((e) => e.value).reduce((a, b) => a + b) / _jerkBuffer.length;
-          ref.read(vehicleMonitorProvider.notifier).updateAcceleration(avgJerk);
-        }
-
-        if (_activeTriggers.contains('Heavy Traffic')) {
-          if (currentSpeedKmh < 30 && currentSpeedKmh > 0) {
-            _lowSpeedCounter++;
-            if (_lowSpeedCounter > 600) {
-              _triggerPreventativeAlert(
-                'Traffic Detected',
-                "We know heavy traffic stresses you out. Stay cool!",
-              );
-              _lowSpeedCounter = -600;
-            }
-          } else {
-            _lowSpeedCounter = 0;
-          }
-        }
-      } else {
-        // TRACK MODE TELEMETRY ROUTING
-        if (currentAcceleration != null) {
-          _telemetryService.processTrackTelemetry(
-            currentSpeed: currentSpeedKmh,
-            accelX: currentAcceleration!.x,
-            accelY: currentAcceleration!.y,
-            gyroZ: _useGyroscopeFusion ? _smoothedGyroZ : 0.0,
-          );
-        }
-      }
-    });
-
-    // ==================== MAGNETOMETER ====================
-    _magSub = magnetometerEvents.listen((event) {
-      currentMagnetometer = event;
-    });
-
-    // ==================== ACCELEROMETER ====================
-    _accelSub = userAccelerometerEvents.listen((event) {
-      final now = DateTime.now();
-      currentAcceleration = event;
-
-      final magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
-
-      if (currentSpeedKmh > _kMinSpeedForReversalKmh) {
-        _detectDirectionReversal(event.x, event.y, event.z, magnitude);
-      } else {
-        _isDecelerating       = false;
-        _reversalConfirmCount = 0;
-        _lastDirectionX       = event.x;
-        _lastDirectionY       = event.y;
-        _lastDirectionZ       = event.z;
-      }
-
-      final signedAcceleration = _isDecelerating ? -magnitude : magnitude;
-
-      _rawAccelMagnitudes.add(signedAcceleration);
-      if (_rawAccelMagnitudes.length > 5) _rawAccelMagnitudes.removeAt(0);
-
-      // Jerk calculation
-      if (_lastMagnitude != null && _lastAccelTimestamp != null) {
-        final dt = now.difference(_lastAccelTimestamp!).inMicroseconds / 1e6;
-        if (dt > 0) {
-          final jerk = (signedAcceleration - _lastMagnitude!) / dt;
-          _jerkBuffer.add(TimeStampedValue(now, jerk));
-        }
-      }
-      _lastMagnitude = signedAcceleration;
-      _lastAccelTimestamp = now;
-
-      while (_jerkBuffer.isNotEmpty && now.difference(_jerkBuffer.first.time).inSeconds >= 1) {
-        _jerkBuffer.removeFirst();
-      }
-
-      if (currentMagnetometer != null) {
-        _calculateAndProcessYaw(event, currentMagnetometer!, now);
-      }
-
-      // Bifurcate Nanny Jerk Logic
-      if (!_isTrackMode) {
+        // 1. Calculate and evaluate Jerk StdDev twice a second (Normal Mode)
         if (_jerkBuffer.length >= 10 && currentSpeedKmh > _t.minSpeedThresholdKmh) {
           double meanJerk = _jerkBuffer.map((e) => e.value).reduce((a, b) => a + b) / _jerkBuffer.length;
           double variance = _jerkBuffer.map((e) => pow(e.value - meanJerk, 2)).reduce((a, b) => a + b) / _jerkBuffer.length;
           double jerkStdDev = sqrt(variance);
 
-          final double jerkThreshold = _t.jerkStdDevThreshold;
+          // Apply dynamic driver-specific multiplier
+          final double jerkThreshold = _t.jerkStdDevThreshold * _jerkMultiplier;
 
           if (jerkStdDev > jerkThreshold) {
-            if (!_isDecelerating) {
+            if (!_isDecelerating) { // Positive motion
+              // ---- HARSH ACCELERATION ----
               _consecutiveHarshAccel++;
               _consecutiveHarshBrake = 0;
               _sessionService.updateAccelDecelState('accel');
@@ -314,6 +270,7 @@ class VehicleMonitorService {
                 _consecutiveHarshAccel = 0;
               }
             } else {
+              // ---- HARSH BRAKING ----
               _consecutiveHarshBrake++;
               _consecutiveHarshAccel = 0;
               _sessionService.updateAccelDecelState('decel');
@@ -344,6 +301,106 @@ class VehicleMonitorService {
           _consecutiveHarshAccel = 0;
           _consecutiveHarshBrake = 0;
         }
+
+      } else {
+        // Track Mode Telemetry Evaluation
+        if (currentAcceleration != null) {
+          _telemetryService.processTrackTelemetry(
+            currentSpeed: currentSpeedKmh,
+            accelX: currentAcceleration!.x,
+            accelY: currentAcceleration!.y,
+            gyroZ: _useGyroscopeFusion ? _smoothedGyroZ : 0.0,
+          );
+        }
+      }
+
+      // 2. Standard UI updates (Now pushing isolated smoothed UI acceleration)
+      ref.read(vehicleMonitorProvider.notifier).updateAcceleration(_smoothedUiAcceleration);
+      ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
+      ref.read(vehicleMonitorProvider.notifier).updateDistance(totalDistanceMeters);
+      _sessionService.updateSpeed(currentSpeedKmh);
+
+      if (!_isTrackMode) {
+        if (_activeTriggers.contains('Heavy Traffic')) {
+          if (currentSpeedKmh < 30 && currentSpeedKmh > 0) {
+            _lowSpeedCounter++;
+            if (_lowSpeedCounter > 600) {
+              _triggerPreventativeAlert(
+                'Traffic Detected',
+                "We know heavy traffic stresses you out. Stay cool!",
+              );
+              _lowSpeedCounter = -600;
+            }
+          } else {
+            _lowSpeedCounter = 0;
+          }
+        }
+      }
+    });
+
+    // ==================== MAGNETOMETER ====================
+    _magSub = magnetometerEvents.listen((event) {
+      currentMagnetometer = event;
+    });
+
+    // ==================== ACCELEROMETER & EVENT MATH ====================
+    _accelSub = userAccelerometerEvents.listen((event) {
+      final now = DateTime.now();
+      currentAcceleration = event;
+
+      // 1. Calculate Acceleration Magnitude Invariant |a(t)|
+      final magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+
+      if (currentSpeedKmh > _kMinSpeedForReversalKmh) {
+        _detectDirectionReversal(event.x, event.y, event.z, magnitude);
+      } else {
+        _isDecelerating       = false;
+        _reversalConfirmCount = 0;
+        _lastDirectionX       = event.x;
+        _lastDirectionY       = event.y;
+        _lastDirectionZ       = event.z;
+      }
+
+      final signedAcceleration = _isDecelerating ? -magnitude : magnitude;
+
+      _rawAccelMagnitudes.add(signedAcceleration);
+      if (_rawAccelMagnitudes.length > 5) _rawAccelMagnitudes.removeAt(0);
+
+      // Jerk calculation with dt clamping
+      if (_lastMagnitude != null && _lastAccelTimestamp != null) {
+        final dt = now.difference(_lastAccelTimestamp!).inMicroseconds / 1e6; // in seconds
+
+        // Ignore micro-updates faster than 10ms to prevent division-by-zero or infinity spikes
+        if (dt > 0.01) {
+          final jerk = (signedAcceleration - _lastMagnitude!) / dt;
+          _jerkBuffer.add(TimeStampedValue(now, jerk));
+          _lastMagnitude = signedAcceleration;
+          _lastAccelTimestamp = now;
+        }
+      } else {
+        _lastMagnitude = signedAcceleration;
+        _lastAccelTimestamp = now;
+      }
+
+      // Purge jerk values older than 1 second (rolling window)
+      while (_jerkBuffer.isNotEmpty && now.difference(_jerkBuffer.first.time).inSeconds >= 1) {
+        _jerkBuffer.removeFirst();
+      }
+
+      // --------------------------------------------------------------------------
+      // NEW: UI Specific Axis-First LPF to cancel zero-mean engine vibration
+      // --------------------------------------------------------------------------
+      _uiLpfX = (_kLpfAlphaUi * event.x) + ((1 - _kLpfAlphaUi) * _uiLpfX);
+      _uiLpfY = (_kLpfAlphaUi * event.y) + ((1 - _kLpfAlphaUi) * _uiLpfY);
+      _uiLpfZ = (_kLpfAlphaUi * event.z) + ((1 - _kLpfAlphaUi) * _uiLpfZ);
+
+      double uiMagnitude = sqrt(_uiLpfX * _uiLpfX + _uiLpfY * _uiLpfY + _uiLpfZ * _uiLpfZ);
+      _smoothedUiAcceleration = _isDecelerating ? -uiMagnitude : uiMagnitude;
+      // --------------------------------------------------------------------------
+
+      // Earth-Relative Yaw Calculation
+      if (currentMagnetometer != null) {
+        _calculateAndProcessYaw(event, currentMagnetometer!, now);
       }
     });
 
@@ -360,15 +417,21 @@ class VehicleMonitorService {
       _gyroSub = gyroscopeEvents.listen((GyroscopeEvent event) {
         _smoothedGyroZ = (_kLpfAlpha * event.z) + ((1 - _kLpfAlpha) * _smoothedGyroZ);
       });
+      debugPrint('✅ Gyroscope fusion enabled');
     }
 
-    // ==================== GPS STREAM ====================
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.best,
         distanceFilter: 1,
       ),
     ).listen((position) {
+      // Ignore garbage indoor GPS bounces
+      if (position.accuracy > 20.0) {
+        debugPrint('Ignoring poor GPS signal: ${position.accuracy}m accuracy');
+        return;
+      }
+
       final now = DateTime.now();
       currentSpeedKmh = position.speed * 3.6;
 
@@ -380,7 +443,6 @@ class VehicleMonitorService {
           _checkCrashFromSpeedDrop(context, ref);
         }
       } else {
-        // Route raw coordinates to the telemetry engine
         _telemetryService.updateGpsPosition(position.latitude, position.longitude);
       }
 
@@ -399,8 +461,25 @@ class VehicleMonitorService {
     debugPrint('✅ Monitoring started');
   }
 
-  // ==================== YAW CALCULATION ====================
+  // ==================== FETCH PERSONALIZED THRESHOLDS ====================
+  Future<void> _fetchDynamicThresholdModifiers(String userId) async {
+    try {
+      final profile = await DriverProfileService.getCachedProfile(userId);
+      if (profile != null && profile['thresholdModifiers'] != null) {
+        final mods = profile['thresholdModifiers'];
+        _jerkMultiplier = (mods['jerkThresholdMultiplier'] ?? 1.0).toDouble();
+        _yawMultiplier = (mods['yawThresholdMultiplier'] ?? 1.0).toDouble();
+
+        debugPrint('🔧 Applied Personalized Baseline Modifiers — Jerk: $_jerkMultiplier, Yaw: $_yawMultiplier');
+      }
+    } catch (e) {
+      debugPrint('Failed to load threshold modifiers: $e');
+    }
+  }
+
+  // ==================== YAW CALCULATION (Earth-Relative) ====================
   void _calculateAndProcessYaw(UserAccelerometerEvent accel, MagnetometerEvent mag, DateTime now) {
+    // 1. Calculate Pitch and Roll from Gravity Vector (Accelerometer)
     double normA = sqrt(accel.x * accel.x + accel.y * accel.y + accel.z * accel.z);
     if (normA == 0) return;
 
@@ -411,6 +490,8 @@ class VehicleMonitorService {
     double pitch = atan2(-ax, sqrt(ay * ay + az * az));
     double roll  = atan2(ay, az);
 
+    // 2. Extract Yaw Angle (rotation around Z-axis of Earth)
+    // using Magnetometer and rotation matrix compensation
     double mx = mag.x;
     double my = mag.y;
     double mz = mag.z;
@@ -420,9 +501,11 @@ class VehicleMonitorService {
 
     double yaw = atan2(-magYComp, magXComp);
 
+    // 3. Calculate Yaw Rate
     if (_lastYaw != null && _lastYawTimestamp != null) {
-      final dt = now.difference(_lastYawTimestamp!).inMicroseconds / 1e6;
+      final dt = now.difference(_lastYawTimestamp!).inMicroseconds / 1e6; // seconds
       if (dt > 0) {
+        // Handle wrapping around PI / -PI
         double dYaw = yaw - _lastYaw!;
         if (dYaw > pi) dYaw -= 2 * pi;
         if (dYaw < -pi) dYaw += 2 * pi;
@@ -435,6 +518,7 @@ class VehicleMonitorService {
     _lastYaw = yaw;
     _lastYawTimestamp = now;
 
+    // Maintain 1-second rolling window
     while (_yawRateBuffer.isNotEmpty && now.difference(_yawRateBuffer.first.time).inSeconds >= 1) {
       _yawRateBuffer.removeFirst();
     }
@@ -443,7 +527,7 @@ class VehicleMonitorService {
   }
 
   Future<void> _checkStressTriggers(String userId) async {
-    if (_isTrackMode) return; // MUTE NANNY
+    if (_isTrackMode) return;
 
     try {
       final profile = await DriverProfileService.getCachedProfile(userId);
@@ -527,11 +611,13 @@ class VehicleMonitorService {
       _reversalConfirmCount++;
       if (_reversalConfirmCount >= _kReversalHysteresisCount && !_isDecelerating) {
         _isDecelerating = true;
+        debugPrint('🔴 Direction Reversal confirmed after $_reversalConfirmCount samples — DECELERATION mode');
       }
     } else {
       _reversalConfirmCount = 0;
       if (magnitude < magnitudeSettledThreshold && _isDecelerating) {
         _isDecelerating = false;
+        debugPrint('🟢 Settled — ACCELERATION mode');
       }
     }
 
@@ -543,7 +629,7 @@ class VehicleMonitorService {
   // ==================== TURN DETECTION ====================
 
   void _detectTurn() {
-    if (_isTrackMode) return; // MUTE NANNY
+    if (_isTrackMode) return;
 
     if (_yawRateBuffer.isEmpty || currentSpeedKmh < _t.minSpeedThresholdKmh) {
       _resetTurnState();
@@ -556,9 +642,11 @@ class VehicleMonitorService {
       return;
     }
 
+    // Mean Yaw Rate over the 1-second window
     double meanYawRate = _yawRateBuffer.map((e) => e.value).reduce((a, b) => a + b) / _yawRateBuffer.length;
 
-    if (meanYawRate.abs() > _t.yawRateThreshold) {
+    // Apply dynamic driver-specific multiplier
+    if (meanYawRate.abs() > (_t.yawRateThreshold * _yawMultiplier)) {
       if (_turnStartTime == null) {
         _turnStartTime  = DateTime.now();
         _turnEntrySpeed = currentSpeedKmh;
@@ -572,6 +660,7 @@ class VehicleMonitorService {
       if (durationMs >= _t.turnDurationMs) {
         if (_useGyroscopeFusion) {
           if (_smoothedGyroZ.abs() <= _t.gyroRotationThreshold) {
+            debugPrint('⚠️ Turn rejected: no gyro rotation');
             _resetTurnState();
             return;
           }
@@ -587,6 +676,11 @@ class VehicleMonitorService {
         _analyzeTurnQuality(
             _turnEntrySpeed ?? currentSpeedKmh, currentSpeedKmh, _turnPeakYawRate);
         _feedbackService.evaluateTurn(_turnPeakYawRate, currentSpeedKmh);
+
+        debugPrint(
+          '🔄 Turn: $direction | Peak Yaw Rate: ${_turnPeakYawRate.toStringAsFixed(2)} rad/s | '
+              '${durationMs}ms | ${currentSpeedKmh.toStringAsFixed(0)} km/h',
+        );
 
         _lastTurnDetection = DateTime.now();
         _resetTurnState();
@@ -613,7 +707,7 @@ class VehicleMonitorService {
       WidgetRef ref,
       double avgMagnitude,
       ) {
-    if (_isTrackMode) return; // MUTE NANNY
+    if (_isTrackMode) return;
 
     if (_lastCrashDetection != null &&
         DateTime.now().difference(_lastCrashDetection!) <
@@ -630,7 +724,7 @@ class VehicleMonitorService {
   }
 
   void _checkCrashFromSpeedDrop(BuildContext context, WidgetRef ref) {
-    if (_isTrackMode) return; // MUTE NANNY
+    if (_isTrackMode) return;
 
     if (_lastCrashDetection != null &&
         DateTime.now().difference(_lastCrashDetection!) <
@@ -706,9 +800,6 @@ class VehicleMonitorService {
         await Future.delayed(const Duration(milliseconds: 500));
 
         if (!_isTrackMode) {
-          // =====================================
-          // CITY NANNY SESSION SAVE
-          // =====================================
           await _sessionService.saveSummary(
             userId: _userId!,
             vehicleId: _vehicleId!,
@@ -747,14 +838,7 @@ class VehicleMonitorService {
 
           _showSnack('🎯 Goals updated based on your performance', Colors.purple);
         } else {
-          // =====================================
-          // TRACK MODE SESSION SAVE
-          // =====================================
-          // Hypothetical hook to retrieve the racing data map for the session
-          // final lapData = _telemetryService.getLapData();
-
           _showSnack('🏁 Track Session Saved', Colors.greenAccent);
-          debugPrint('🏁 Track session successfully ended.');
         }
       } catch (e) {
         debugPrint('Failed to update vehicle data: $e');
@@ -785,13 +869,14 @@ class VehicleMonitorService {
     String reason  = '';
     final speedDrop = entrySpeed - exitSpeed;
 
-    if (peakYawRate > _t.jerkyTurnLimit) {
+    // Apply dynamic driver-specific multiplier to turn quality limits
+    if (peakYawRate > (_t.jerkyTurnLimit * _yawMultiplier)) {
       quality = 'Jerky';
       reason  = 'High Yaw Rate (${peakYawRate.toStringAsFixed(1)} rad/s)';
     } else if (speedDrop > _t.significantSpeedDrop) {
       quality = 'Jerky';
       reason  = 'Hard Braking in Turn (-${speedDrop.toStringAsFixed(1)} km/h)';
-    } else if (peakYawRate < _t.smoothTurnLimit && speedDrop < 10.0) {
+    } else if (peakYawRate < (_t.smoothTurnLimit * _yawMultiplier) && speedDrop < 10.0) {
       quality = 'Smooth';
       reason  = 'Controlled & Steady';
     }
@@ -811,7 +896,7 @@ class VehicleMonitorService {
   }
 
   void _calculateAccidentRisk(WidgetRef ref) {
-    if (_isTrackMode) return; // MUTE NANNY
+    if (_isTrackMode) return;
 
     double risk = 0;
     if (currentSpeedKmh > 80)                  risk += 25;
@@ -819,7 +904,9 @@ class VehicleMonitorService {
     if (_sessionService.harshBrakeEvents > 2)  risk += 20;
     final hour = DateTime.now().hour;
     if (hour >= 22 || hour < 5)                risk += 10;
-    if (_turnPeakYawRate > 4.5)                risk += 15;
+
+    // Apply dynamic driver-specific multiplier to accident risk turn penalty
+    if (_turnPeakYawRate > (1.2 * _yawMultiplier)) risk += 15;
 
     _currentRiskScore = risk;
     _currentRiskLevel = risk <= 30 ? 'Low' : risk <= 60 ? 'Medium' : 'High';

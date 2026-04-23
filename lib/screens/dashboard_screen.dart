@@ -9,7 +9,7 @@ import '../providers/goals_provider.dart';
 import '../providers/provider.dart';
 import '../services/maintenance_service.dart';
 import 'dashboard_subscreens/driver_profile_widget.dart';
-import 'dashboard_subscreens/track_management_screen.dart';
+import 'track_screens/track_management_screen.dart';
 import 'maintenance_subscreens/maintenance_widget.dart';
 import 'dashboard_subscreens/monitor_widget.dart';
 import 'maintenance_subscreens/summary_widget.dart';
