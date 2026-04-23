@@ -487,9 +487,11 @@ class _AnimatedChatbotCardWidgetState extends State<AnimatedChatbotCardWidget> w
             color: Colors.transparent,
             child: InkWell(
               onTap: () {
-                Navigator.push(
+                PersistentNavBarNavigator.pushNewScreen(
                   context,
-                  MaterialPageRoute(builder: (context) => const ChatBotScreen()),
+                  screen: const ChatBotScreen(),
+                  withNavBar: false, // <-- This is the magic line
+                  pageTransitionAnimation: PageTransitionAnimation.cupertino,
                 );
               },
               borderRadius: BorderRadius.circular(30.r),

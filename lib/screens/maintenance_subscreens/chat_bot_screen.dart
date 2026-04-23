@@ -48,7 +48,12 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Get the exact height of the keyboard
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+
     return Scaffold(
+      // CRITICAL FIX: Turn off automatic resizing so we can handle it manually
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text("AI Mechanic"),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
@@ -56,17 +61,21 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
       ),
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Padding(
-        padding: EdgeInsets.only(bottom: 70.r),
+        padding: EdgeInsets.only(
+          // If the keyboard is open, push up by the EXACT height of the keyboard.
+          // Otherwise, apply your original 70.r padding for the nav bar.
+          bottom: keyboardHeight > 0 ? keyboardHeight : 70.r,
+        ),
         child: Chat(
           messages: _messages,
           onSendPressed: _handleUserMessage,
           user: _user,
           theme: DefaultChatTheme(
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            primaryColor: Color(0xFF8A3AE1),
-            secondaryColor: Color(0xFFFFFFFF),
-            inputBackgroundColor: Color(0x1F9200EA),
-            sendButtonIcon: Icon(Icons.send, color: Theme.of(context).textTheme.bodySmall?.color,)
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              primaryColor: const Color(0xFF8A3AE1),
+              secondaryColor: const Color(0xFFFFFFFF),
+              inputBackgroundColor: const Color(0x1F9200EA),
+              sendButtonIcon: Icon(Icons.send, color: Theme.of(context).textTheme.bodySmall?.color)
           ),
         ),
       ),
@@ -121,7 +130,7 @@ The user has confirmed the issue or provided deep detail: "$userInput".
 2. **Step-by-Step Guide:** If DIY-friendly, provide a numbered list of steps to inspect or replace the part.
 3. **Tool List:** Mention specific tools needed (e.g., 10mm socket, torque wrench, multimeter).
 4. **Safety Protocol:** List essential safety steps (e.g., "Let the engine cool for 30 minutes," "Disconnect the negative battery terminal").
-5. **The "Mechanic Trigger":** If the repair requires specialized tools (like a hydraulic press) or involves high-voltage EV components/internal engine timing, strongly advise visiting a certified professional.
+5. **The "Mechanic Trigger":** If the repair requires specialized tools (like a hydraulic press) or involves high-voltage EV components/internal engine timing, strongly advise visiting a certified mechanic.
 
 ### Style:
 Keep steps concise. Use "Mechanic Tips" (e.g., "Spray WD-40 on the bolt 10 minutes before trying to turn it").
