@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../providers/provider.dart';
 import '../../services/racing_telemetary_core.dart';
-import '../../widgets/reusable_widgets.dart';
 
 enum MappingState { idle, mappingLeft, mappingRight, processing }
 
@@ -55,22 +54,12 @@ class _TrackMappingScreenState extends ConsumerState<TrackMappingScreen> {
 
   Future<void> _processAndSaveTrack() async {
     if (_leftBoundaryRaw.length < 4 || _rightBoundaryRaw.length < 4) {
-      showAppSnackBar(
-        context,
-        'Please map more points for a valid track.',
-        backgroundColor: Colors.pink,
-        terminalStyle: false,
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please map more points for a valid track.')));
       return;
     }
 
     if (_nameController.text.trim().isEmpty) {
-      showAppSnackBar(
-        context,
-        'Please name the track first.',
-        backgroundColor: Colors.pink,
-        terminalStyle: false,
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please name the track first.')));
       return;
     }
 
@@ -81,28 +70,15 @@ class _TrackMappingScreenState extends ConsumerState<TrackMappingScreen> {
     if (userId == null) return;
 
     try {
-      // 1. Establish the Cartesian Anchor Point (Start of left boundary)
       final anchor = _leftBoundaryRaw.first;
+      final leftCartesian = _leftBoundaryRaw.map((p) => CoordinateConverter.latLonToCartesian(p.latitude, p.longitude, anchor.latitude, anchor.longitude)).toList();
+      final rightCartesian = _rightBoundaryRaw.map((p) => CoordinateConverter.latLonToCartesian(p.latitude, p.longitude, anchor.latitude, anchor.longitude)).toList();
 
-      // 2. Convert GPS to local Cartesian Plan (Meters)
-      final leftCartesian = _leftBoundaryRaw.map((p) =>
-          CoordinateConverter.latLonToCartesian(p.latitude, p.longitude, anchor.latitude, anchor.longitude)).toList();
-      final rightCartesian = _rightBoundaryRaw.map((p) =>
-          CoordinateConverter.latLonToCartesian(p.latitude, p.longitude, anchor.latitude, anchor.longitude)).toList();
-
-      // 3. Apply Catmull-Rom Spline Smoothing
       final smoothedLeft = TrackBoundarySmoother.smoothBoundary(leftCartesian);
       final smoothedRight = TrackBoundarySmoother.smoothBoundary(rightCartesian);
-
-      // 4. Calculate Racing Centerline
       final centerline = TrackAnalyzer.calculateCenterline(smoothedLeft, smoothedRight);
 
-      // Save to Firebase
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('tracks')
-          .add({
+      await FirebaseFirestore.instance.collection('users').doc(userId).collection('tracks').add({
         'trackName': _nameController.text.trim(),
         'anchorLat': anchor.latitude,
         'anchorLon': anchor.longitude,
@@ -162,61 +138,38 @@ class _TrackMappingScreenState extends ConsumerState<TrackMappingScreen> {
               SizedBox(height: 20.h),
 
               _buildMappingCard(
-                title: 'LEFT PERIMETER',
-                subtitle: 'Walk the inner/left edge of the track.',
-                pointCount: _leftBoundaryRaw.length,
-                isActive: _state == MappingState.mappingLeft,
-                color: const Color(0xFF00E5FF),
-                onTap: () => _toggleMapping(MappingState.mappingLeft),
+                title: 'LEFT PERIMETER', subtitle: 'Walk the inner/left edge of the track.',
+                pointCount: _leftBoundaryRaw.length, isActive: _state == MappingState.mappingLeft,
+                color: const Color(0xFF00E5FF), onTap: () => _toggleMapping(MappingState.mappingLeft),
               ),
               SizedBox(height: 15.h),
 
               _buildMappingCard(
-                title: 'RIGHT PERIMETER',
-                subtitle: 'Walk the outer/right edge of the track.',
-                pointCount: _rightBoundaryRaw.length,
-                isActive: _state == MappingState.mappingRight,
-                color: const Color(0xFFFF9800),
-                onTap: () => _toggleMapping(MappingState.mappingRight),
+                title: 'RIGHT PERIMETER', subtitle: 'Walk the outer/right edge of the track.',
+                pointCount: _rightBoundaryRaw.length, isActive: _state == MappingState.mappingRight,
+                color: const Color(0xFFFF9800), onTap: () => _toggleMapping(MappingState.mappingRight),
               ),
               SizedBox(height: 20.h),
 
-              // ==========================================
-              // LIVE TRACK PREVIEW RADAR
-              // ==========================================
               Expanded(
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1F3A),
-                    borderRadius: BorderRadius.circular(20.r),
-                    border: Border.all(color: Colors.white10),
+                    color: const Color(0xFF1A1F3A), borderRadius: BorderRadius.circular(20.r), border: Border.all(color: Colors.white10),
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20.r),
                     child: Stack(
                       children: [
                         CustomPaint(
-                          painter: TrackPreviewPainter(
-                            leftBoundary: _leftBoundaryRaw,
-                            rightBoundary: _rightBoundaryRaw,
-                          ),
+                          painter: TrackPreviewPainter(leftBoundary: _leftBoundaryRaw, rightBoundary: _rightBoundaryRaw),
                           child: const SizedBox.expand(),
                         ),
                         if (_leftBoundaryRaw.isEmpty && _rightBoundaryRaw.isEmpty)
-                          Center(
-                            child: Text(
-                              'Awaiting GPS Data...',
-                              style: TextStyle(color: Colors.white30, fontSize: 12.sp, fontWeight: FontWeight.bold),
-                            ),
-                          ),
+                          Center(child: Text('Awaiting GPS Data...', style: TextStyle(color: Colors.white30, fontSize: 12.sp, fontWeight: FontWeight.bold))),
                         Positioned(
-                          top: 10.h,
-                          left: 15.w,
-                          child: Text(
-                            'LIVE RADAR',
-                            style: TextStyle(color: Colors.white54, fontSize: 10.sp, fontWeight: FontWeight.bold, letterSpacing: 2),
-                          ),
+                          top: 10.h, left: 15.w,
+                          child: Text('LIVE RADAR', style: TextStyle(color: Colors.white54, fontSize: 10.sp, fontWeight: FontWeight.bold, letterSpacing: 2)),
                         ),
                       ],
                     ),
@@ -226,19 +179,17 @@ class _TrackMappingScreenState extends ConsumerState<TrackMappingScreen> {
               SizedBox(height: 20.h),
 
               SizedBox(
-                width: double.infinity,
-                height: 55.h,
+                width: double.infinity, height: 55.h,
                 child: ElevatedButton(
                   onPressed: (_leftBoundaryRaw.isNotEmpty && _rightBoundaryRaw.isNotEmpty) ? _processAndSaveTrack : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8B7CFF),
-                    disabledBackgroundColor: const Color(0xFF1A1F3A),
+                    backgroundColor: const Color(0xFF8B7CFF), disabledBackgroundColor: const Color(0xFF1A1F3A),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
                   ),
                   child: Text('PROCESS & SAVE TRACK', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1)),
                 ),
               ),
-              SizedBox(height: 15.h,)
+              SizedBox(height: 15.h)
             ],
           ),
         ),
@@ -283,9 +234,6 @@ class _TrackMappingScreenState extends ConsumerState<TrackMappingScreen> {
   }
 }
 
-// ==========================================
-// LIVE PREVIEW CUSTOM PAINTER
-// ==========================================
 class TrackPreviewPainter extends CustomPainter {
   final List<Position> leftBoundary;
   final List<Position> rightBoundary;
@@ -299,7 +247,6 @@ class TrackPreviewPainter extends CustomPainter {
     double minLat = 90.0, maxLat = -90.0;
     double minLon = 180.0, maxLon = -180.0;
 
-    // Helper to find the bounds
     void updateBounds(Position p) {
       if (p.latitude < minLat) minLat = p.latitude;
       if (p.latitude > maxLat) maxLat = p.latitude;
@@ -310,77 +257,40 @@ class TrackPreviewPainter extends CustomPainter {
     for (var p in leftBoundary) { updateBounds(p); }
     for (var p in rightBoundary) { updateBounds(p); }
 
-    // Add slight padding to the bounds so lines don't hug the edges
     double latRange = maxLat - minLat;
     double lonRange = maxLon - minLon;
-
-    // Prevent division by zero if only one point exists
     if (latRange == 0) latRange = 0.0001;
     if (lonRange == 0) lonRange = 0.0001;
 
-    // Apply a 10% padding
-    minLat -= latRange * 0.1;
-    maxLat += latRange * 0.1;
-    minLon -= lonRange * 0.1;
-    maxLon += lonRange * 0.1;
+    minLat -= latRange * 0.1; maxLat += latRange * 0.1;
+    minLon -= lonRange * 0.1; maxLon += lonRange * 0.1;
+    latRange = maxLat - minLat; lonRange = maxLon - minLon;
 
-    latRange = maxLat - minLat;
-    lonRange = maxLon - minLon;
-
-    // Convert GPS Position to Canvas Offset
     Offset getOffset(Position p) {
       double x = ((p.longitude - minLon) / lonRange) * size.width;
-      // Y is inverted because latitude increases towards North (up), but canvas Y increases downwards
       double y = size.height - (((p.latitude - minLat) / latRange) * size.height);
       return Offset(x, y);
     }
 
-    // Draw Left Boundary (Cyan)
     if (leftBoundary.isNotEmpty) {
-      final leftPaint = Paint()
-        ..color = const Color(0xFF00E5FF)
-        ..strokeWidth = 2.5
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke;
-
-      final leftPath = Path();
-      leftPath.moveTo(getOffset(leftBoundary.first).dx, getOffset(leftBoundary.first).dy);
-
-      for (int i = 1; i < leftBoundary.length; i++) {
-        leftPath.lineTo(getOffset(leftBoundary[i]).dx, getOffset(leftBoundary[i]).dy);
-      }
+      final leftPaint = Paint()..color = const Color(0xFF00E5FF)..strokeWidth = 2.5..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round..style = PaintingStyle.stroke;
+      final leftPath = Path()..moveTo(getOffset(leftBoundary.first).dx, getOffset(leftBoundary.first).dy);
+      for (int i = 1; i < leftBoundary.length; i++) leftPath.lineTo(getOffset(leftBoundary[i]).dx, getOffset(leftBoundary[i]).dy);
       canvas.drawPath(leftPath, leftPaint);
-
-      // Draw dot on latest left point
       canvas.drawCircle(getOffset(leftBoundary.last), 4, Paint()..color = const Color(0xFF00E5FF));
     }
 
-    // Draw Right Boundary (Orange)
     if (rightBoundary.isNotEmpty) {
-      final rightPaint = Paint()
-        ..color = const Color(0xFFFF9800)
-        ..strokeWidth = 2.5
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke;
-
-      final rightPath = Path();
-      rightPath.moveTo(getOffset(rightBoundary.first).dx, getOffset(rightBoundary.first).dy);
-
-      for (int i = 1; i < rightBoundary.length; i++) {
-        rightPath.lineTo(getOffset(rightBoundary[i]).dx, getOffset(rightBoundary[i]).dy);
-      }
+      final rightPaint = Paint()..color = const Color(0xFFFF9800)..strokeWidth = 2.5..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round..style = PaintingStyle.stroke;
+      final rightPath = Path()..moveTo(getOffset(rightBoundary.first).dx, getOffset(rightBoundary.first).dy);
+      for (int i = 1; i < rightBoundary.length; i++) rightPath.lineTo(getOffset(rightBoundary[i]).dx, getOffset(rightBoundary[i]).dy);
       canvas.drawPath(rightPath, rightPaint);
-
-      // Draw dot on latest right point
       canvas.drawCircle(getOffset(rightBoundary.last), 4, Paint()..color = const Color(0xFFFF9800));
     }
   }
 
   @override
   bool shouldRepaint(covariant TrackPreviewPainter oldDelegate) {
-    return leftBoundary.length != oldDelegate.leftBoundary.length ||
-        rightBoundary.length != oldDelegate.rightBoundary.length;
+    return leftBoundary.length != oldDelegate.leftBoundary.length || rightBoundary.length != oldDelegate.rightBoundary.length;
   }
 }
