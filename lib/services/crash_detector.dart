@@ -7,6 +7,7 @@ import 'package:flutter_sms/flutter_sms.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/goals_provider.dart';
 import '../providers/safety_feature_provider.dart';
+import 'package:geolocator/geolocator.dart';
 
 class CrashDetector {
   static Timer? countdownTimer;
@@ -69,9 +70,7 @@ class CrashDetector {
         _dialogContext = dialogContext;
         return _CrashDialogContent(
           onDismiss: () {
-            _cancelCountdown();
-            _closeDialog();
-            _isActive = false;
+            reset(); // FIX: Use centralized reset instead of manual clear
             onDialogClosed?.call();
           },
           onSendHelp: () async {
@@ -87,9 +86,7 @@ class CrashDetector {
   }
 
   static Future<void> _sendHelp(WidgetRef ref) async {
-    _cancelCountdown();
-    _isActive = false;
-    _closeDialog();
+    reset(); // FIX: Use centralized reset instead of manual clear
 
     await audioPlayer.stop();
     print("CrashDetector: Sending emergency help");
@@ -113,8 +110,23 @@ class CrashDetector {
 
     print("Attempting to send SMS to: $emergencyContact");
 
+    String locationUrl = "";
+    try {
+      // Try to get the current location
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // Construct the Google Maps URL
+      locationUrl = "\n📍 My location: https://maps.google.com/?q=${position.latitude},${position.longitude}";
+    } catch (e) {
+      print("❌ Failed to get location: $e");
+      locationUrl = "\n📍 Location could not be determined.";
+    }
+
+    // Append the location URL to the default message
     String message =
-        "🚨 EMERGENCY: I've been in an accident and need help! This is an automated message from RAXXY.";
+        "🚨 EMERGENCY: I've been in an accident and need help!$locationUrl\n\nThis is an automated message from RAXXY.";
 
     // Try Method 1: flutter_sms (Direct send)
     bool sentDirectly = await _sendViaSMS(emergencyContact, message);
@@ -195,7 +207,8 @@ class CrashDetector {
 
   static void reset() {
     _cancelCountdown();
-    _isActive = false;
+    _closeDialog(); // FIX: Explicitly close the dialog here so it's guaranteed to disappear
+    _isActive = false; // FIX: This successfully unlocks the cooldown
     remainingSeconds = 15;
     _dialogContext = null;
   }
