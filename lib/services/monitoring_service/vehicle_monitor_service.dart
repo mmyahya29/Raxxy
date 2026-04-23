@@ -22,6 +22,9 @@ import '../../widgets/reusable_widgets.dart';
 // Import the new Racing Telemetry Service
 import 'package:raxxy/services/racing_telemetary_core.dart';
 
+import '../telemetry_logger_service.dart';
+
+
 // Helper classes for sliding windows
 class TimeStampedValue {
   final DateTime time;
@@ -62,6 +65,9 @@ class VehicleMonitorService {
   bool _isTrackMode = false;
   final RacingTelemetryService _telemetryService = RacingTelemetryService();
   RacingTelemetryService get telemetry => _telemetryService;
+
+  // NEW: Telemetry Logger Instance
+  final TelemetryLogger _logger = TelemetryLogger();
 
   // ==================== ACCIDENT RISK ====================
   double _currentRiskScore = 0;
@@ -194,6 +200,8 @@ class VehicleMonitorService {
 
     _sessionService.startSession();
     _telemetryService.reset(); // Reset telemetry engine
+    await _logger.startLogging(); // NEW: Start the CSV logger
+
     _lastCrashDetection    = null;
     _consecutiveHarshAccel = 0;
     _consecutiveHarshBrake = 0;
@@ -340,11 +348,14 @@ class VehicleMonitorService {
 
     // ==================== MAGNETOMETER ====================
     _magSub = magnetometerEvents.listen((event) {
+      _logger.logMagnetometer(event); // NEW: Log magnetometer event
       currentMagnetometer = event;
     });
 
     // ==================== ACCELEROMETER & EVENT MATH ====================
     _accelSub = userAccelerometerEvents.listen((event) {
+      _logger.logAccelerometer(event); // NEW: Log accelerometer event
+
       final now = DateTime.now();
       currentAcceleration = event;
 
@@ -426,6 +437,8 @@ class VehicleMonitorService {
         distanceFilter: 1,
       ),
     ).listen((position) {
+      _logger.logGps(position); // NEW: Log GPS position
+
       // Ignore garbage indoor GPS bounces
       if (position.accuracy > 20.0) {
         debugPrint('Ignoring poor GPS signal: ${position.accuracy}m accuracy');
@@ -767,6 +780,8 @@ class VehicleMonitorService {
 
     _lastPosition = null;
     _isMonitoring = false;
+
+    await _logger.stopAndExport(); // NEW: Stop the logger and open share dialog
 
     try {
       await WakelockPlus.disable();
