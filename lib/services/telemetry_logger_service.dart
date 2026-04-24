@@ -3,7 +3,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:permission_handler/permission_handler.dart'; // NEW IMPORT
+import 'package:permission_handler/permission_handler.dart';
 
 class TelemetryLogger {
   File? _file;
@@ -52,8 +52,8 @@ class TelemetryLogger {
     // Open file for writing
     _sink = _file!.openWrite();
 
-    // Write CSV Header
-    _sink!.writeln('timestamp,sensor_type,val1,val2,val3');
+    // Write Expanded CSV Header (Supports up to 6 values for GPS)
+    _sink!.writeln('timestamp,sensor_type,val1,val2,val3,val4,val5,val6');
     isLogging = true;
     print('🔴 Recording Telemetry to $_currentFilePath');
   }
@@ -61,19 +61,31 @@ class TelemetryLogger {
   void logAccelerometer(UserAccelerometerEvent event) {
     if (!isLogging || _sink == null) return;
     final now = DateTime.now().millisecondsSinceEpoch;
-    _sink!.writeln('$now,accel,${event.x},${event.y},${event.z}');
+    // Format: timestamp, accel, x, y, z, empty, empty, empty
+    _sink!.writeln('$now,accel,${event.x},${event.y},${event.z},0,0,0');
   }
 
   void logMagnetometer(MagnetometerEvent event) {
     if (!isLogging || _sink == null) return;
     final now = DateTime.now().millisecondsSinceEpoch;
-    _sink!.writeln('$now,mag,${event.x},${event.y},${event.z}');
+    // Format: timestamp, mag, x, y, z, empty, empty, empty
+    _sink!.writeln('$now,mag,${event.x},${event.y},${event.z},0,0,0');
   }
 
+  // NEW: Log Gyroscope for EKF Yaw Rate prediction
+  void logGyroscope(GyroscopeEvent event) {
+    if (!isLogging || _sink == null) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // Format: timestamp, gyro, x, y, z, empty, empty, empty
+    _sink!.writeln('$now,gyro,${event.x},${event.y},${event.z},0,0,0');
+  }
+
+  // UPDATED: Log expanded GPS data (Accuracy, Heading, Altitude)
   void logGps(Position position) {
     if (!isLogging || _sink == null) return;
     final now = DateTime.now().millisecondsSinceEpoch;
-    _sink!.writeln('$now,gps,${position.latitude},${position.longitude},${position.speed}');
+    // Format: timestamp, gps, lat, lon, speed, accuracy, heading, altitude
+    _sink!.writeln('$now,gps,${position.latitude},${position.longitude},${position.speed},${position.accuracy},${position.heading},${position.altitude}');
   }
 
   Future<void> stopAndExport() async {
