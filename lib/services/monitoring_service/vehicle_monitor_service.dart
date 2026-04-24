@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_sms/flutter_sms.dart';
 import 'package:raxxy/services/crash_detector.dart';
 import 'package:raxxy/services/monitoring_service/session_summary_service.dart';
 import 'package:raxxy/services/monitoring_service/driving_score_service.dart';
@@ -828,6 +829,52 @@ class VehicleMonitorService {
             Colors.blue,
           );
           await Future.delayed(const Duration(milliseconds: 500));
+
+          // =================================================================
+          // 🛑 NEW: GUARDIAN SAFETY FEATURE (AUTO SMS)
+          // =================================================================
+          try {
+            // 1. Fetch user data to check age
+            final userDoc = await firestore.collection('users').doc(_userId).get();
+            if (userDoc.exists) {
+              final age = userDoc.data()?['age'];
+              final guardianContact = userDoc.data()?['guardianContact'];
+
+              // 2. Check if minor AND has a guardian contact
+              if (age != null && age < 18 && guardianContact != null && guardianContact.toString().isNotEmpty) {
+
+                final driverName = userDoc.data()?['name'] ?? 'The driver';
+                final dist = (totalDistanceMeters / 1000).toStringAsFixed(1);
+                final maxSpd = summary['maxSpeedKmh']?.toStringAsFixed(0) ?? '0';
+                final hBrakes = summary['harshBrakes'] ?? 0;
+                final hAccels = summary['harshAccelerations'] ?? 0;
+
+                // 3. Format the SMS
+                String smsMessage = "🛡️ RAXXY Guardian Alert:\n"
+                    "$driverName has finished driving.\n"
+                    "• Distance: $dist km\n"
+                    "• Max Speed: $maxSpd km/h\n"
+                    "• Harsh Brakes: $hBrakes\n"
+                    "• Harsh Accels: $hAccels";
+
+                // 4. Send the SMS silently in the background
+                try {
+
+                  await sendSMS(
+                    message: smsMessage,
+                    recipients: [guardianContact],
+                    sendDirect: true,
+                  );
+                  debugPrint("✅ Guardian Summary SMS sent successfully!");
+                } catch (smsError) {
+                  debugPrint("❌ Failed to send Guardian SMS: $smsError");
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint("❌ Error checking guardian status: $e");
+          }
+          // =================================================================
 
           await DrivingScoreService.updateDrivingScore(
             userId: _userId!,

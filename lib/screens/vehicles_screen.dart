@@ -6,6 +6,7 @@ import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import 'package:raxxy/widgets/reusable_widgets.dart';
 import '../providers/provider.dart';
 import '../providers/vehicle_provider.dart';
+import '../providers/safety_feature_provider.dart';
 import '../services/monitoring_service/vehicle_monitor_service.dart';
 import 'vehicle_subscreens/add_vehicle.dart';
 import 'package:geolocator/geolocator.dart';
@@ -618,6 +619,28 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
       );
     } else {
       // START
+
+      // --- NEW LOGIC: Check Crash Detection ---
+      final isCrashDetectionEnabled = ref.read(featureNotifierProvider);
+
+      if (!isCrashDetectionEnabled) {
+        final action = await showDialog<String>(
+          context: context,
+          builder: (ctx) => _buildCrashDetectionWarningDialog(ctx, isDark),
+        );
+
+        if (action == 'settings') {
+          // Jump to Settings screen (Tab index 3)
+          widget.controller.jumpToTab(3);
+          return; // Stop the start process so they can turn it on
+        } else if (action != 'skip') {
+          // If they tapped outside to dismiss the dialog, cancel starting
+          return;
+        }
+      }
+      // ----------------------------------------
+
+      // Original Calibration dialog
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => _buildCustomDialog(
@@ -682,6 +705,49 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
           ),
           onPressed: () => Navigator.of(context).pop(true),
           child: Text(confirmText, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
+
+  // --- NEW: Custom Warning Dialog for Crash Detection ---
+  Widget _buildCrashDetectionWarningDialog(BuildContext context, bool isDark) {
+    return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF1A1F3A) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24.r),
+        side: BorderSide(color: const Color(0xFFFF5252).withOpacity(0.5)), // Red border
+      ),
+      title: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: const Color(0xFFFF5252), size: 24.r),
+          SizedBox(width: 8.w),
+          Expanded(
+            child: Text(
+              "SAFETY WARNING",
+              style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, color: const Color(0xFFFF5252), letterSpacing: 1.5),
+            ),
+          ),
+        ],
+      ),
+      content: Text(
+        "Crash Detection is currently disabled.\n\nEnabling this feature allows the system to automatically detect severe impacts and trigger the Emergency Protocol to contact your designated numbers.\n\nWe highly recommend enabling this in System Settings before starting your drive.",
+        style: TextStyle(fontSize: 13.sp, color: isDark ? Colors.white70 : Colors.black87, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop('skip'),
+          child: Text("SKIP FOR NOW", style: TextStyle(color: isDark ? Colors.white54 : Colors.grey)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFFF5252).withOpacity(0.2),
+            foregroundColor: const Color(0xFFFF5252),
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+          ),
+          onPressed: () => Navigator.of(context).pop('settings'),
+          child: const Text("GO TO SETTINGS", style: TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );
