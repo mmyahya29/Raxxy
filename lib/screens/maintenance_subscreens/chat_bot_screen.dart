@@ -4,6 +4,7 @@ import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -43,7 +44,54 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   @override
   void initState() {
     super.initState();
+    _loadMessages();
+  }
+
+  // --- Chat History & State Management ---
+
+  Future<void> _loadMessages() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastChatTime = prefs.getInt('chat_timestamp') ?? 0;
+    final currentTime = DateTime.now().millisecondsSinceEpoch;
+
+    // 24 hours = 86,400,000 milliseconds
+    if (currentTime - lastChatTime < 86400000) {
+      final savedMessages = prefs.getStringList('chat_messages');
+
+      if (savedMessages != null && savedMessages.isNotEmpty) {
+        setState(() {
+          // 1. Load Messages
+          _messages.clear();
+          _messages.addAll(
+            savedMessages.map((e) => types.Message.fromJson(jsonDecode(e) as Map<String, dynamic>)).toList(),
+          );
+
+          // 2. Load the Bot's Brain (Stage & Issue)
+          final savedStageIndex = prefs.getInt('chat_stage') ?? 0;
+          _currentStage = ChatStage.values[savedStageIndex];
+          _identifiedIssue = prefs.getString('chat_issue');
+        });
+        return;
+      }
+    }
+
+    // If 24 hours passed, reset everything
     _addMessage(_bot, "Hello! I'm your AI Mechanic. How can I help you today?");
+  }
+
+  Future<void> _saveData() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // 1. Save Messages & Time
+    final messagesJson = _messages.map((m) => jsonEncode(m.toJson())).toList();
+    await prefs.setStringList('chat_messages', messagesJson);
+    await prefs.setInt('chat_timestamp', DateTime.now().millisecondsSinceEpoch);
+
+    // 2. Save the Bot's Brain (Stage & Issue)
+    await prefs.setInt('chat_stage', _currentStage.index);
+    if (_identifiedIssue != null) {
+      await prefs.setString('chat_issue', _identifiedIssue!);
+    }
   }
 
   @override
@@ -162,6 +210,8 @@ Supportive, encouraging, and focused on vehicle longevity.
         _currentStage = ChatStage.solution;
       }
     });
+
+    _saveData(); // Save every time the bot moves to the next step
   }
 
   // --- API Connection (FIXED FOR GROQ) ---
@@ -215,5 +265,7 @@ Supportive, encouraging, and focused on vehicle longevity.
     setState(() {
       _messages.insert(0, message);
     });
+
+    _saveData(); // Save every time a message is sent/received
   }
 }

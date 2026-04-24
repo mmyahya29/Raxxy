@@ -23,10 +23,17 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
   final passwordController = TextEditingController();
   final confirmpasswordController = TextEditingController();
 
+  // NEW: Age and Guardian controllers
+  final ageController = TextEditingController();
+  final guardianController = TextEditingController();
+
   bool pashid = true;
   bool cpashid = true;
 
   bool isLoading = false;
+
+  // NEW: Track if user is a minor
+  bool isTeenager = false;
 
   final firestore = FirebaseFirestore.instance;
 
@@ -54,6 +61,23 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
     );
 
     _animationController.forward();
+
+    // NEW: Listen to age input to show/hide guardian field
+    ageController.addListener(() {
+      final ageText = ageController.text.trim();
+      if (ageText.isNotEmpty) {
+        final age = int.tryParse(ageText);
+        if (age != null) {
+          setState(() {
+            isTeenager = age < 18;
+          });
+        }
+      } else {
+        setState(() {
+          isTeenager = false;
+        });
+      }
+    });
   }
 
   @override
@@ -63,7 +87,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
     emailController.dispose();
     passwordController.dispose();
     confirmpasswordController.dispose();
+    ageController.dispose();
+    guardianController.dispose();
     super.dispose();
+  }
+
+  bool phoneValidator(String? value) {
+    if (value == null || value.isEmpty) return false;
+    return RegExp(r'^\+92\d{10}$').hasMatch(value);
   }
 
   Future<void> signup() async {
@@ -72,6 +103,26 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
     final email = emailController.text.trim();
     final cpassword = confirmpasswordController.text.trim();
     final password = passwordController.text.trim();
+    final ageText = ageController.text.trim();
+    final guardianPhone = guardianController.text.trim();
+
+    // NEW: Validate Age
+    if (ageText.isEmpty) {
+      showError("MISSING DATA: Please enter your age");
+      return;
+    }
+
+    final age = int.tryParse(ageText);
+    if (age == null || age < 16) {
+      showError("ACCESS DENIED: Minimum age requirement is 16");
+      return;
+    }
+
+    // NEW: Validate Guardian Phone if teenager
+    if (isTeenager && !phoneValidator(guardianPhone)) {
+      showError("INVALID FORMAT: Guardian number requires +92XXXXXXXXXX");
+      return;
+    }
 
     if (emailValidator(email)) {
       if (password == cpassword && password != "" && cpassword != "") {
@@ -87,11 +138,19 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
             await user.reload();
 
             // Save to Firestore
-            await firestore.collection('users').doc(user.uid).set({
+            Map<String, dynamic> userData = {
               'email': user.email,
               'name': name,
+              'age': age,
               'createdAt': FieldValue.serverTimestamp(),
-            });
+            };
+
+            // Only save guardian contact if they are a minor
+            if (isTeenager) {
+              userData['guardianContact'] = guardianPhone;
+            }
+
+            await firestore.collection('users').doc(user.uid).set(userData);
 
             if (mounted) {
               _showSystemSnack("REGISTERED: Access granted", const Color(0xFF00E5FF));
@@ -150,15 +209,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
       decoration: BoxDecoration(
         gradient: isDark
             ? const RadialGradient(
-                colors: [Color(0xFF1E2447), Color(0xFF0A0E27)],
-                radius: 1.5,
-                center: Alignment.topCenter,
-              )
+          colors: [Color(0xFF1E2447), Color(0xFF0A0E27)],
+          radius: 1.5,
+          center: Alignment.topCenter,
+        )
             : const LinearGradient(
-                colors: [Color(0xFFF4F5F9), Color(0xFFE8EAF6)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+          colors: [Color(0xFFF4F5F9), Color(0xFFE8EAF6)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
       ),
       child: SafeArea(
         child: SingleChildScrollView(
@@ -253,6 +312,43 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with SingleTickerPr
                           SizedBox(height: 8.h),
                           buildTextField(context, emailController, 'someone@example.com', () => setState(() {})),
                           SizedBox(height: 16.h),
+
+                          // NEW: Age Field
+                          _buildInputLabel(Icons.cake_outlined, 'AGE'),
+                          SizedBox(height: 8.h),
+                          buildTextField(context, ageController, 'Enter your age', () => setState(() {}), inputType: TextInputType.number),
+                          SizedBox(height: 16.h),
+
+                          // NEW: Dynamic Guardian Field (Only shows if age < 18)
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            child: isTeenager
+                                ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.family_restroom_rounded, size: 16.r, color: const Color(0xFFFF9800)),
+                                    SizedBox(width: 8.w),
+                                    Text(
+                                      'GUARDIAN CONTACT (REQUIRED FOR MINORS)',
+                                      style: TextStyle(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFFFF9800),
+                                        letterSpacing: 1.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 8.h),
+                                buildTextField(context, guardianController, '+92XXXXXXXXXX', () => setState(() {}), inputType: TextInputType.phone),
+                                SizedBox(height: 16.h),
+                              ],
+                            )
+                                : const SizedBox.shrink(),
+                          ),
 
                           // Password Field
                           _buildInputLabel(Icons.lock_outline_rounded, 'PASSWORD'),
