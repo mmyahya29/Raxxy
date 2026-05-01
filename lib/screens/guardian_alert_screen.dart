@@ -32,7 +32,9 @@ class _GuardianAlertScreenState extends State<GuardianAlertScreen> {
   @override
   void initState() {
     super.initState();
-    _sendGuardianSms();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sendGuardianSms();
+    });
   }
 
   Future<void> _sendGuardianSms() async {
@@ -76,7 +78,9 @@ class _GuardianAlertScreenState extends State<GuardianAlertScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_isSending,
+      child: Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFFF4F5F9),
       appBar: AppBar(
         backgroundColor: isDark ? const Color(0xFF1A1F3A) : Colors.white,
@@ -92,8 +96,10 @@ class _GuardianAlertScreenState extends State<GuardianAlertScreen> {
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_rounded,
-              color: isDark ? Colors.white70 : Colors.black54),
-          onPressed: () => Navigator.of(context).pop(),
+              color: _isSending
+                  ? (isDark ? Colors.white24 : Colors.black26)
+                  : (isDark ? Colors.white70 : Colors.black54)),
+          onPressed: _isSending ? null : () => Navigator.of(context).pop(),
         ),
       ),
       body: SafeArea(
@@ -256,7 +262,7 @@ class _GuardianAlertScreenState extends State<GuardianAlertScreen> {
                             : _smsSent
                                 ? "Guardian notified successfully!"
                                 : _smsError != null
-                                    ? "Failed to send SMS. Please notify your guardian manually."
+                                    ? "Failed to send SMS. Please contact your guardian directly: ${widget.guardianContact}"
                                     : "Guardian alert pending.",
                         style: TextStyle(
                           fontSize: 12.sp,
@@ -280,7 +286,7 @@ class _GuardianAlertScreenState extends State<GuardianAlertScreen> {
                 width: double.infinity,
                 height: 52.h,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: _isSending ? null : () => Navigator.of(context).pop(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF9800),
                     foregroundColor: Colors.white,
@@ -302,7 +308,8 @@ class _GuardianAlertScreenState extends State<GuardianAlertScreen> {
           ),
         ),
       ),
-    );
+    ),   // Scaffold
+    );   // PopScope
   }
 
   Widget _buildStatRow({
