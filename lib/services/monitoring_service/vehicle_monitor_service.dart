@@ -33,8 +33,6 @@ class TimeStampedValue {
 class VehicleMonitorService {
   // ==============================================================================
   // 🔧 RUNTIME THRESHOLDS
-  // Loaded from SensorThresholdsProvider when startMonitoring() is called.
-  // Defaults match the original hardcoded constants exactly.
   // ==============================================================================
   late SensorThresholds _t;
 
@@ -42,23 +40,42 @@ class VehicleMonitorService {
   double _jerkMultiplier = 1.0;
   double _yawMultiplier  = 1.0;
 
-  // Fixed internal constant — LPF smoothing for event detection (moderate)
-  // BUG 6 FIX: Single pipeline used for both display and detection, alpha=0.2
-  static const double _kLpfAlpha   = 0.15;
-  static const double _kLpfAlphaUi = 0.20; // was 0.05 (over-smoothed display) — now moderate
+  // ── LPF Alphas ──────────────────────────────────────────────────────────────
+  // UI display smoothing — moderate, applied to gravity-removed linear axes.
+  static const double _kLpfAlphaUi = 0.20;
 
-  // BUG 3 FIX: Gravity LPF — high alpha keeps gravity stable (slow-moving component)
-  static const double _kGravityAlpha = 0.98;
+  // FIX A — Gravity LPF alpha.
+  // 0.98 was so slow that a phone mounted at any angle took ~2.5 s to converge,
+  // causing a 7-10 m/s² idle reading.  0.90 converges in ~10 samples (~100 ms)
+  // which is fast enough to not pollute the first jerk window while still
+  // treating gravity as the DC component.
+  static const double _kGravityAlpha = 0.90;
 
-  // Gravity vector estimate (phone-frame, m/s²). Initialised from first accel sample.
-  double _gravX = 0.0;
-  double _gravY = 0.0;
-  double _gravZ = 9.81;
+  // FIX B — Complementary filter: how much the gyroscope "corrects" the gravity
+  // direction every sample. Prevents sustained cornering G from bleeding into
+  // the gravity estimate and suppressing real acceleration to near-zero.
+  // Formula:  grav_corrected = (1 - _kGyroTiltBlend) * grav_lpf
+  //                          + _kGyroTiltBlend * gravity_from_gyro_integration
+  // A value of 0.02 means 2 % gyro correction per sample @ ~100 Hz → ~2 s
+  // time-constant for tilt correction without fighting the LPF.
+  static const double _kGyroTiltBlend = 0.02;
 
-  // BUG 16 FIX: Gyro fusion uses a more responsive alpha (0.5 instead of 0.15)
+  // Gyro fusion — more responsive alpha so fast turns reach the gate
   static const double _kGyroAlpha = 0.50;
 
-  // UI smoothed axes (after gravity removal)
+  // ── Gravity state ────────────────────────────────────────────────────────────
+  // Initialised to NaN so we can detect the very first sample and seed
+  // directly — this eliminates the 2.5 s warmup spike entirely (FIX A).
+  double _gravX = double.nan;
+  double _gravY = double.nan;
+  double _gravZ = double.nan;
+
+  // Raw gyro (un-smoothed) for complementary tilt correction
+  double _rawGyroX = 0.0;
+  double _rawGyroY = 0.0;
+  // _smoothedGyroZ used for turn gate (declared below)
+
+  // UI smoothed axes (gravity-removed)
   double _uiLpfX = 0.0;
   double _uiLpfY = 0.0;
   double _uiLpfZ = 0.0;
@@ -67,9 +84,24 @@ class VehicleMonitorService {
   // Minimum GPS speed (km/h) below which direction-reversal logic is skipped.
   static const double _kMinSpeedForReversalKmh = 3.0;
 
-  // BUG 1 FIX: Hysteresis count for confirming reversal (entry) and re-entry (exit).
+  // ── Hysteresis counts ────────────────────────────────────────────────────────
   static const int _kReversalHysteresisCount = 3;
-  static const int _kAccelReentryCount       = 3; // samples below threshold to exit decel mode
+  static const int _kAccelReentryCount       = 3;
+
+  // ── GPS-speed derivative deceleration detector ───────────────────────────────
+  // FIX C — replaces the unreliable IMU angle-based direction flag.
+  // We compare the current GPS speed to the smoothed GPS speed from
+  // _kGpsDecelWindowMs ago. If the vehicle is losing speed faster than
+  // _kGpsDecelThresholdKmhPerS km/h per second, we are decelerating.
+  static const double _kGpsDecelThresholdKmhPerS = 1.5; // ~0.42 m/s² — light braking
+  static const int    _kGpsDecelWindowMs         = 800;  // look-back window
+  // Hysteresis: GPS decel flag must be seen for this many GPS updates before commit
+  static const int    _kGpsDecelConfirmSamples   = 1;
+  // And must be gone for this many updates before releasing decel mode
+  static const int    _kGpsAccelConfirmSamples   = 2;
+
+  int _gpsDecelConfirmCount = 0;
+  int _gpsAccelConfirmCount = 0;
 
   // ==================== STATE ====================
   bool _isTrackMode = false;
@@ -79,8 +111,8 @@ class VehicleMonitorService {
   final TelemetryLogger _logger = TelemetryLogger();
 
   // ==================== ACCIDENT RISK ====================
-  double   _currentRiskScore = 0;
-  String   _currentRiskLevel = 'Low';
+  double    _currentRiskScore = 0;
+  String    _currentRiskLevel = 'Low';
   DateTime? _lastRiskAlert;
   static const Duration _kRiskCooldown = Duration(seconds: 8);
 
@@ -107,13 +139,12 @@ class VehicleMonitorService {
   StreamSubscription<Position>?               _positionSub;
   StreamSubscription<GyroscopeEvent>?         _gyroSub;
   Timer? _uiUpdateTimer;
-  Timer? _speedZoneTimer; // BUG 17: field retained — implement or remove as needed
+  Timer? _speedZoneTimer;
 
   UserAccelerometerEvent? currentAcceleration;
   MagnetometerEvent?      currentMagnetometer;
   double currentSpeedKmh = 0.0;
 
-  // BUG 13 FIX: crashFeature stored as class field, updated via Riverpod listener
   bool _crashFeatureEnabled = false;
 
   final List<Map<String, dynamic>> _speedHistory = [];
@@ -122,18 +153,15 @@ class VehicleMonitorService {
   Position? _lastPosition;
   bool      _isMonitoring = false;
 
-  // ==================== JERK STANDARD DEVIATION ====================
+  // ==================== JERK ====================
   final Queue<TimeStampedValue> _jerkBuffer = Queue();
-
-  // BUG 6 FIX: Separate last-magnitude for jerk pipeline (uses gravity-removed linear accel)
   double?   _lastLinearMagnitude;
   DateTime? _lastAccelTimestamp;
 
-  // Need to hold onto absolute accel buffers for crash detection
-  // BUG 10 FIX: stores unsigned magnitude only
+  // Crash detection buffer — unsigned magnitude only
   final List<double> _rawAccelMagnitudes = [];
 
-  // BUG 18 FIX: sustainedSampleCount raised to 3 (requires 1.5 s of sustained harsh behaviour)
+  // sustainedSampleCount = 3 → 1.5 s sustained harsh behaviour required
   final int sustainedSampleCount = 3;
 
   String? _userId;
@@ -153,16 +181,13 @@ class VehicleMonitorService {
   List<String> _activeTriggers            = [];
   int          _lowSpeedCounter           = 0;
 
-  // ==================== TURN DETECTION (YAW RATE — GPS-primary) ====================
-  // BUG 7 FIX: Primary yaw source is GPS bearing change (no magnetometer bias).
-  // Magnetometer path kept as fallback when GPS speed is too low.
+  // ==================== TURN DETECTION (GPS-primary) ====================
   final Queue<TimeStampedValue> _yawRateBuffer = Queue();
 
-  // GPS-bearing yaw
   double?   _lastGpsBearing;
   DateTime? _lastGpsBearingTimestamp;
 
-  // Magnetometer-compass yaw (fallback when GPS slow)
+  // Magnetometer-compass yaw (fallback when GPS speed < 15 km/h)
   double?   _lastYaw;
   DateTime? _lastYawTimestamp;
 
@@ -175,19 +200,24 @@ class VehicleMonitorService {
   double     _smoothedGyroZ      = 0.0;
   final bool _useGyroscopeFusion = true;
 
-  // ==================== DIRECTION DETECTION ====================
-  // BUG 1+2 FIX: direction state uses gravity-removed linear accel vector.
-  // Anchor vector is locked at the moment reversal suspicion begins and held
-  // for the full hysteresis window.
+  // ==================== DIRECTION / DECELERATION STATE ====================
+  // FIX C: _isDecelerating is now driven by GPS speed derivative, not IMU angles.
+  // The IMU anchor fields are kept only for track-mode telemetry — they are no
+  // longer used for the braking/accel classification in normal mode.
+  bool _isDecelerating = false;
+
+  // Legacy IMU anchor — retained for _detectDirectionReversalImu() which is
+  // now only called in track mode (where GPS bearing is also available but
+  // we keep the IMU path for high-frequency telemetry).
   double? _anchorLinX;
   double? _anchorLinY;
   double? _anchorLinZ;
-  bool    _isDecelerating        = false;
-  int     _reversalConfirmCount  = 0;
-  int     _accelReentryCount     = 0; // counts samples after reversal exits threshold
+  int     _reversalConfirmCount = 0;
+  int     _accelReentryCount    = 0;
 
-  final double magnitudeSettledThreshold  = 0.5;
-  final double directionReversalThreshold = 160.0;
+  // FIX C: settled-threshold is kept for the UI magnitude display only.
+  final double magnitudeSettledThreshold  = 0.3; // lowered — pure vibration floor
+  final double directionReversalThreshold = 150.0; // kept for track mode
 
   // ==============================================================================
   // START MONITORING
@@ -212,7 +242,6 @@ class VehicleMonitorService {
     _activeTriggers            = [];
     _lowSpeedCounter           = 0;
 
-    // Reset multipliers & smoothing to baseline
     _jerkMultiplier = 1.0;
     _yawMultiplier  = 1.0;
     _uiLpfX = 0.0;
@@ -220,10 +249,17 @@ class VehicleMonitorService {
     _uiLpfZ = 0.0;
     _smoothedUiAcceleration = 0.0;
 
-    // BUG 3 FIX: Reset gravity estimate
-    _gravX = 0.0;
-    _gravY = 0.0;
-    _gravZ = 9.81;
+    // FIX A: Reset gravity to NaN so the first real sample seeds it instantly.
+    _gravX = double.nan;
+    _gravY = double.nan;
+    _gravZ = double.nan;
+    _rawGyroX = 0.0;
+    _rawGyroY = 0.0;
+
+    // FIX C: Reset GPS decel detector
+    _isDecelerating       = false;
+    _gpsDecelConfirmCount = 0;
+    _gpsAccelConfirmCount = 0;
 
     if (_isMonitoring) return;
     _isMonitoring      = true;
@@ -240,19 +276,15 @@ class VehicleMonitorService {
     _consecutiveHarshBrake = 0;
     _lastTurnDetection     = null;
 
-    // BUG 1+2 FIX: Reset anchor-based direction state
+    // Reset IMU anchor state
     _anchorLinX           = null;
     _anchorLinY           = null;
     _anchorLinZ           = null;
-    _isDecelerating       = false;
     _reversalConfirmCount = 0;
     _accelReentryCount    = 0;
 
-    // GPS bearing yaw state
     _lastGpsBearing          = null;
     _lastGpsBearingTimestamp = null;
-
-    // Magnetometer yaw state (fallback)
     _lastYaw          = null;
     _lastYawTimestamp = null;
 
@@ -261,8 +293,8 @@ class VehicleMonitorService {
     _lastLinearMagnitude = null;
     _lastAccelTimestamp  = null;
     _rawAccelMagnitudes.clear();
+    _speedHistory.clear();
 
-    // BUG 13 FIX: Read crash feature at session start and keep it updated
     _crashFeatureEnabled = ref.read(featureNotifierProvider) ?? false;
     ref.listenManual(featureNotifierProvider, (_, next) {
       _crashFeatureEnabled = next ?? false;
@@ -273,13 +305,11 @@ class VehicleMonitorService {
     ref.read(vehicleMonitorProvider.notifier).setModel(model);
 
     sendNotification('RAXXY', _isTrackMode ? 'Track Mode Active' : 'Monitoring service started');
-    debugPrint('RAXXY: Monitoring service started. Track Mode: $_isTrackMode');
+    debugPrint('RAXXY: Monitoring started. Track Mode: $_isTrackMode');
 
     _checkStressTriggers(userId);
 
     if (!_isTrackMode) {
-      // BUG 12 FIX: Await threshold fetch before sensors start so multipliers
-      // are stable from the first sample; no stale-state race condition.
       await _fetchDynamicThresholdModifiers(userId);
     }
 
@@ -295,17 +325,14 @@ class VehicleMonitorService {
       _feedbackService.evaluateWeather(ref);
     }
 
-    // UI update timer (500 ms) — heavy math evaluated here at a controlled rate
+    // ── UI / event timer (500 ms) ──────────────────────────────────────────
     _uiUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
 
-      // BUG 14 FIX: Recalculate accident risk every 500 ms so speed/events are live
       if (!_isTrackMode) {
         _calculateAccidentRisk(ref);
       }
 
       if (!_isTrackMode) {
-        // BUG 5 FIX: use millisecond precision for window boundary and evaluate
-        // only when buffer has a meaningful minimum of samples.
         if (_jerkBuffer.length >= 10 && currentSpeedKmh > _t.minSpeedThresholdKmh) {
           final double meanJerk =
               _jerkBuffer.map((e) => e.value).reduce((a, b) => a + b) /
@@ -315,17 +342,15 @@ class VehicleMonitorService {
                   _jerkBuffer.length;
           final double jerkStdDev = sqrt(variance);
 
-          // Apply dynamic driver-specific multiplier
           final double jerkThreshold = _t.jerkStdDevThreshold * _jerkMultiplier;
 
           if (jerkStdDev > jerkThreshold) {
             if (!_isDecelerating) {
-              // ---- HARSH ACCELERATION ----
+              // ── HARSH ACCELERATION ──────────────────────────────────────
               _consecutiveHarshAccel++;
               _consecutiveHarshBrake = 0;
               _sessionService.updateAccelDecelState('accel');
 
-              // BUG 18 FIX: sustainedSampleCount is now 3 — real hysteresis
               if (_consecutiveHarshAccel >= sustainedSampleCount &&
                   _shouldSendHaptic(_lastHarshAccelNotification)) {
                 _sessionService.incrementHarshAccel();
@@ -335,11 +360,11 @@ class VehicleMonitorService {
                   vibrationPattern: [0, 200, 100, 200],
                 );
                 _feedbackService.evaluateAcceleration(jerkStdDev, currentSpeedKmh);
-                debugPrint('🟢 Harsh ACCELERATION (Jerk StdDev): ${jerkStdDev.toStringAsFixed(2)} m/s³');
+                debugPrint('🟢 Harsh ACCEL (JerkStdDev): ${jerkStdDev.toStringAsFixed(2)} m/s³');
                 _consecutiveHarshAccel = 0;
               }
             } else {
-              // ---- HARSH BRAKING ----
+              // ── HARSH BRAKING ───────────────────────────────────────────
               _consecutiveHarshBrake++;
               _consecutiveHarshAccel = 0;
               _sessionService.updateAccelDecelState('decel');
@@ -353,7 +378,7 @@ class VehicleMonitorService {
                   vibrationPattern: [0, 500, 100, 300],
                 );
                 _feedbackService.evaluateBraking(jerkStdDev, currentSpeedKmh);
-                debugPrint('🔴 Harsh BRAKING (Jerk StdDev): ${jerkStdDev.toStringAsFixed(2)} m/s³');
+                debugPrint('🔴 Harsh BRAKE (JerkStdDev): ${jerkStdDev.toStringAsFixed(2)} m/s³');
                 _consecutiveHarshBrake = 0;
               }
             }
@@ -363,7 +388,6 @@ class VehicleMonitorService {
             _sessionService.updateAccelDecelState('neutral');
           }
 
-          // BUG 13 FIX: use instance field (always current) instead of stale closure
           if (_crashFeatureEnabled) {
             _checkCrashFromAcceleration(context, ref, jerkStdDev);
           }
@@ -373,7 +397,7 @@ class VehicleMonitorService {
         }
 
       } else {
-        // Track Mode Telemetry Evaluation
+        // Track Mode
         if (currentAcceleration != null) {
           _telemetryService.processTrackTelemetry(
             currentSpeed: currentSpeedKmh,
@@ -384,7 +408,6 @@ class VehicleMonitorService {
         }
       }
 
-      // Standard UI updates — push isolated smoothed UI acceleration
       ref.read(vehicleMonitorProvider.notifier).updateAcceleration(_smoothedUiAcceleration);
       ref.read(vehicleMonitorProvider.notifier).updateSpeed(currentSpeedKmh);
       ref.read(vehicleMonitorProvider.notifier).updateDistance(totalDistanceMeters);
@@ -408,89 +431,83 @@ class VehicleMonitorService {
       }
     });
 
-    // ==================== MAGNETOMETER ====================
+    // ── MAGNETOMETER ──────────────────────────────────────────────────────────
     _magSub = magnetometerEvents.listen((event) {
       _logger.logMagnetometer(event);
       currentMagnetometer = event;
     });
 
-    // ==================== ACCELEROMETER & EVENT MATH ====================
+    // ── GYROSCOPE ─────────────────────────────────────────────────────────────
+    if (_useGyroscopeFusion) {
+      _gyroSub = gyroscopeEvents.listen((GyroscopeEvent event) {
+        _logger.logGyroscope(event);
+        _rawGyroX  = event.x;
+        _rawGyroY  = event.y;
+        _smoothedGyroZ =
+            (_kGyroAlpha * event.z) + ((1 - _kGyroAlpha) * _smoothedGyroZ);
+      });
+      debugPrint('✅ Gyroscope fusion enabled');
+    }
+
+    // ── ACCELEROMETER ─────────────────────────────────────────────────────────
     _accelSub = userAccelerometerEvents.listen((event) {
       _logger.logAccelerometer(event);
 
-      final now = DateTime.now();
+      final DateTime now = DateTime.now();
       currentAcceleration = event;
 
-      // ------------------------------------------------------------------
-      // BUG 3 FIX: Gravity removal using high-alpha LPF.
-      // Gravity is the slow (DC) component; we track it with alpha=0.98.
-      // Linear (motion) acceleration = raw - gravity estimate.
-      // ------------------------------------------------------------------
-      _gravX = _kGravityAlpha * _gravX + (1 - _kGravityAlpha) * event.x;
-      _gravY = _kGravityAlpha * _gravY + (1 - _kGravityAlpha) * event.y;
-      _gravZ = _kGravityAlpha * _gravZ + (1 - _kGravityAlpha) * event.z;
+      // ── FIX A: First-sample seeding ─────────────────────────────────────
+      if (_gravX.isNaN) {
+        _gravX = event.x;
+        _gravY = event.y;
+        _gravZ = event.z;
+        // Seed UI LPF too so it starts at zero linear accel
+        _uiLpfX = 0.0;
+        _uiLpfY = 0.0;
+        _uiLpfZ = 0.0;
+        return; // Skip the rest for this single seed sample
+      }
 
+      // ── FIX A + B: Complementary gravity update ──────────────────────────
+      double gx = _kGravityAlpha * _gravX + (1 - _kGravityAlpha) * event.x;
+      double gy = _kGravityAlpha * _gravY + (1 - _kGravityAlpha) * event.y;
+      double gz = _kGravityAlpha * _gravZ + (1 - _kGravityAlpha) * event.z;
+
+      if (_useGyroscopeFusion) {
+        if (_lastAccelTimestamp != null) {
+          final double dt =
+              now.difference(_lastAccelTimestamp!).inMicroseconds / 1e6;
+          if (dt > 0.001 && dt < 0.1) {
+            final double dGx = ( _rawGyroY * gz - 0            ) * dt;
+            final double dGy = ( 0          * 0  - _rawGyroX * gz) * dt;
+            final double dGz = ( _rawGyroX * gy  - _rawGyroY * gx) * dt;
+
+            gx += _kGyroTiltBlend * dGx;
+            gy += _kGyroTiltBlend * dGy;
+            gz += _kGyroTiltBlend * dGz;
+          }
+        }
+      }
+
+      _gravX = gx;
+      _gravY = gy;
+      _gravZ = gz;
+
+      // ── Gravity-removed linear acceleration ──────────────────────────────
       final double linX = event.x - _gravX;
       final double linY = event.y - _gravY;
       final double linZ = event.z - _gravZ;
 
-      // Unsigned linear magnitude (gravity-removed)
-      final double linearMagnitude = sqrt(linX * linX + linY * linY + linZ * linZ);
+      final double linearMagnitude =
+      sqrt(linX * linX + linY * linY + linZ * linZ);
 
-      // ------------------------------------------------------------------
-      // Direction reversal on gravity-removed linear acceleration
-      // ------------------------------------------------------------------
-      if (currentSpeedKmh > _kMinSpeedForReversalKmh) {
-        _detectDirectionReversal(linX, linY, linZ, linearMagnitude);
-      } else {
-        // Below min speed: neutral state, no reversal
-        _isDecelerating       = false;
-        _reversalConfirmCount = 0;
-        _accelReentryCount    = 0;
-        _anchorLinX           = null;
-        _anchorLinY           = null;
-        _anchorLinZ           = null;
+      // ── FIX C: _isDecelerating is set by GPS in the position stream. ─────
+      if (_isTrackMode) {
+        _detectDirectionReversalImu(linX, linY, linZ, linearMagnitude);
       }
 
-      // BUG 4 FIX: Signed acceleration derived from gravity-removed linear accel.
-      // Sign flip is now based on a stable, hysteresis-gated flag — not noisy
-      // raw magnitude — so flip artifacts are eliminated.
-      final double signedAcceleration = _isDecelerating ? -linearMagnitude : linearMagnitude;
-
-      // BUG 10 FIX: Crash detection buffer stores UNSIGNED magnitude only.
-      _rawAccelMagnitudes.add(linearMagnitude);
-      if (_rawAccelMagnitudes.length > 5) _rawAccelMagnitudes.removeAt(0);
-
-      // ------------------------------------------------------------------
-      // Jerk calculation with dt clamping
-      // BUG 5 FIX: Uses gravity-removed linear magnitude for consistency.
-      // ------------------------------------------------------------------
-      if (_lastLinearMagnitude != null && _lastAccelTimestamp != null) {
-        final double dt =
-            now.difference(_lastAccelTimestamp!).inMicroseconds / 1e6;
-
-        if (dt > 0.01) {
-          final double jerk = (signedAcceleration - _lastLinearMagnitude!) / dt;
-          _jerkBuffer.add(TimeStampedValue(now, jerk));
-          _lastLinearMagnitude = signedAcceleration;
-          _lastAccelTimestamp  = now;
-        }
-      } else {
-        _lastLinearMagnitude = signedAcceleration;
-        _lastAccelTimestamp  = now;
-      }
-
-      // BUG 5 FIX: Purge uses milliseconds for sub-second precision
-      while (_jerkBuffer.isNotEmpty &&
-          now.difference(_jerkBuffer.first.time).inMilliseconds >= 1000) {
-        _jerkBuffer.removeFirst();
-      }
-
-      // ------------------------------------------------------------------
-      // BUG 6 FIX: UI smoothing pipeline uses gravity-removed axes with
-      // moderate alpha (0.20) — same signal as detection, not a separate
-      // over-smoothed pipeline. This makes the displayed value match reality.
-      // ------------------------------------------------------------------
+      // ── UI smoothing (gravity-removed axes) ──────────────────────────────
+      // MOVED ABOVE JERK CALCULATION SO WE CAN USE IT FOR PHYSICAL JERK
       _uiLpfX = (_kLpfAlphaUi * linX) + ((1 - _kLpfAlphaUi) * _uiLpfX);
       _uiLpfY = (_kLpfAlphaUi * linY) + ((1 - _kLpfAlphaUi) * _uiLpfY);
       _uiLpfZ = (_kLpfAlphaUi * linZ) + ((1 - _kLpfAlphaUi) * _uiLpfZ);
@@ -499,12 +516,34 @@ class VehicleMonitorService {
       sqrt(_uiLpfX * _uiLpfX + _uiLpfY * _uiLpfY + _uiLpfZ * _uiLpfZ);
       _smoothedUiAcceleration = _isDecelerating ? -uiMagnitude : uiMagnitude;
 
-      // ------------------------------------------------------------------
-      // BUG 7 FIX: Compass-yaw is now only the LOW-SPEED FALLBACK path.
-      // Primary yaw comes from GPS bearing change (updated in GPS stream).
-      // We still compute compass yaw here so it's ready when GPS is slow,
-      // but it is NOT fed into the yaw rate buffer directly from here.
-      // ------------------------------------------------------------------
+      // Crash detection buffer — unsigned
+      _rawAccelMagnitudes.add(linearMagnitude);
+      if (_rawAccelMagnitudes.length > 5) _rawAccelMagnitudes.removeAt(0);
+
+      // ── Jerk calculation ─────────────────────────────────────────────────
+      // PATCH: Use the vibration-smoothed UI acceleration to calculate physical jerk
+      if (_lastLinearMagnitude != null && _lastAccelTimestamp != null) {
+        final double dt =
+            now.difference(_lastAccelTimestamp!).inMicroseconds / 1e6;
+        if (dt > 0.01) {
+          final double jerk =
+              (_smoothedUiAcceleration - _lastLinearMagnitude!) / dt;
+          _jerkBuffer.add(TimeStampedValue(now, jerk));
+          _lastLinearMagnitude = _smoothedUiAcceleration;
+          _lastAccelTimestamp  = now;
+        }
+      } else {
+        _lastLinearMagnitude = _smoothedUiAcceleration;
+        _lastAccelTimestamp  = now;
+      }
+
+      // Purge jerk older than 1 s
+      while (_jerkBuffer.isNotEmpty &&
+          now.difference(_jerkBuffer.first.time).inMilliseconds >= 1000) {
+        _jerkBuffer.removeFirst();
+      }
+
+      // Compass yaw fallback (GPS speed < 15 km/h)
       if (currentMagnetometer != null && currentSpeedKmh < 15.0) {
         _calculateCompassYawFallback(event, currentMagnetometer!, now);
       }
@@ -521,16 +560,6 @@ class VehicleMonitorService {
       }
     }
 
-    // BUG 16 FIX: Gyro uses more responsive alpha (0.50 instead of 0.15)
-    if (_useGyroscopeFusion) {
-      _gyroSub = gyroscopeEvents.listen((GyroscopeEvent event) {
-        _logger.logGyroscope(event);
-        _smoothedGyroZ =
-            (_kGyroAlpha * event.z) + ((1 - _kGyroAlpha) * _smoothedGyroZ);
-      });
-      debugPrint('✅ Gyroscope fusion enabled');
-    }
-
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.best,
@@ -539,34 +568,29 @@ class VehicleMonitorService {
     ).listen((position) {
       _logger.logGps(position);
 
-      // BUG 15 FIX: Tiered GPS accuracy.
-      // Accept positions up to 50 m accuracy for speed/distance/yaw.
-      // Only use positions < 15 m for crash speed-drop detection.
       if (position.accuracy > 50.0) {
-        debugPrint('Ignoring poor GPS signal: ${position.accuracy}m accuracy');
+        debugPrint('Ignoring poor GPS: ${position.accuracy}m');
         return;
       }
 
-      final now = DateTime.now();
+      final DateTime now = DateTime.now();
       currentSpeedKmh = position.speed * 3.6;
 
-      // ------------------------------------------------------------------
-      // BUG 7 FIX: Primary yaw rate from GPS bearing change.
-      // GPS bearing is compass-true heading of motion — no magnetometer bias,
-      // no hard/soft iron error, accurate at any speed > ~5 km/h.
-      // ------------------------------------------------------------------
+      // ── FIX C: GPS-speed deceleration detector ───────────────────────────
+      if (!_isTrackMode) {
+        _updateDecelStateFromGps(now);
+      }
+
+      // ── GPS bearing → yaw rate ────────────────────────────────────────────
       if (!_isTrackMode && currentSpeedKmh >= _kMinSpeedForReversalKmh) {
-        final double gpsBearing = position.heading; // degrees, 0–360
+        final double gpsBearing = position.heading;
         if (_lastGpsBearing != null && _lastGpsBearingTimestamp != null) {
           final double dtSec =
               now.difference(_lastGpsBearingTimestamp!).inMilliseconds / 1000.0;
           if (dtSec > 0) {
             double dBearing = gpsBearing - _lastGpsBearing!;
-            // Wrap to [-180, +180]
             if (dBearing > 180)  dBearing -= 360;
             if (dBearing < -180) dBearing += 360;
-
-            // Convert bearing change (deg/s) to yaw rate (rad/s)
             final double yawRateRad = (dBearing * pi / 180.0) / dtSec;
             _yawRateBuffer.add(TimeStampedValue(now, yawRateRad));
           }
@@ -575,30 +599,27 @@ class VehicleMonitorService {
         _lastGpsBearingTimestamp = now;
       }
 
-      // BUG 8 FIX: Yaw buffer purged with millisecond precision
       while (_yawRateBuffer.isNotEmpty &&
           now.difference(_yawRateBuffer.first.time).inMilliseconds >= 1000) {
         _yawRateBuffer.removeFirst();
       }
 
-      // Evaluate turn detection after updating yaw buffer from GPS
       if (!_isTrackMode) {
         _detectTurn();
       }
 
       if (!_isTrackMode) {
         _speedHistory.add({'time': now, 'speed': currentSpeedKmh});
-        if (_speedHistory.length > 10) _speedHistory.removeAt(0);
+        if (_speedHistory.length > 20) _speedHistory.removeAt(0);
 
-        // BUG 13 FIX: use instance field, not stale closure
-        // BUG 15 FIX: speed-drop crash check only when GPS is accurate enough
         if (_crashFeatureEnabled &&
             _speedHistory.length >= 2 &&
             position.accuracy < 15.0) {
           _checkCrashFromSpeedDrop(context, ref);
         }
       } else {
-        _telemetryService.updateGpsPosition(position.latitude, position.longitude);
+        _telemetryService.updateGpsPosition(
+            position.latitude, position.longitude);
       }
 
       if (_lastPosition != null) {
@@ -612,156 +633,79 @@ class VehicleMonitorService {
       _lastPosition = position;
     });
 
-    // BUG 14 FIX: _calculateAccidentRisk is now called in the 500ms timer above.
-    // Initial call here still sets up the first reading at session open.
     _calculateAccidentRisk(ref);
     debugPrint('✅ Monitoring started');
   }
 
-  // ==================== FETCH PERSONALIZED THRESHOLDS ====================
-  // BUG 12 FIX: Made non-private async so startMonitoring can await it,
-  // preventing the race where sensors fire before multipliers are loaded.
-  Future<void> _fetchDynamicThresholdModifiers(String userId) async {
-    try {
-      final profile = await DriverProfileService.getCachedProfile(userId);
-      if (profile != null && profile['thresholdModifiers'] != null) {
-        final mods = profile['thresholdModifiers'];
-        _jerkMultiplier =
-            (mods['jerkThresholdMultiplier'] ?? 1.0).toDouble();
-        _yawMultiplier  =
-            (mods['yawThresholdMultiplier'] ?? 1.0).toDouble();
-        debugPrint(
-          '🔧 Applied Personalized Baseline Modifiers — '
-              'Jerk: $_jerkMultiplier, Yaw: $_yawMultiplier',
-        );
-      }
-    } catch (e) {
-      debugPrint('Failed to load threshold modifiers: $e');
-    }
-  }
+  // ============================================================================
+  // FIX C: GPS-SPEED DECELERATION DETECTOR
+  // ============================================================================
+  void _updateDecelStateFromGps(DateTime now) {
+    if (_speedHistory.length < 2) return;
 
-  // ==============================================================================
-  // BUG 7 FIX: Compass yaw is now a LOW-SPEED FALLBACK only.
-  // Called from accelerometer stream when GPS speed < 15 km/h.
-  // Adds to the shared _yawRateBuffer so _detectTurn() works in both paths.
-  // ==============================================================================
-  void _calculateCompassYawFallback(
-      UserAccelerometerEvent accel,
-      MagnetometerEvent mag,
-      DateTime now,
-      ) {
-    // 1. Tilt-compensated heading from accelerometer + magnetometer
-    final double normA =
-    sqrt(accel.x * accel.x + accel.y * accel.y + accel.z * accel.z);
-    if (normA == 0) return;
-
-    final double ax = accel.x / normA;
-    final double ay = accel.y / normA;
-    final double az = accel.z / normA;
-
-    final double pitch = atan2(-ax, sqrt(ay * ay + az * az));
-    final double roll  = atan2(ay, az);
-
-    final double mx = mag.x;
-    final double my = mag.y;
-    final double mz = mag.z;
-
-    final double magXComp =
-        mx * cos(pitch) +
-            my * sin(pitch) * sin(roll) +
-            mz * sin(pitch) * cos(roll);
-    final double magYComp = my * cos(roll) - mz * sin(roll);
-
-    final double yaw = atan2(-magYComp, magXComp);
-
-    // 2. Yaw rate from successive compass readings
-    if (_lastYaw != null && _lastYawTimestamp != null) {
-      final double dt =
-          now.difference(_lastYawTimestamp!).inMicroseconds / 1e6;
-      if (dt > 0) {
-        double dYaw = yaw - _lastYaw!;
-        if (dYaw > pi)  dYaw -= 2 * pi;
-        if (dYaw < -pi) dYaw += 2 * pi;
-
-        final double yawRate = dYaw / dt;
-        _yawRateBuffer.add(TimeStampedValue(now, yawRate));
+    Map<String, dynamic>? referenceEntry;
+    for (int i = 0; i < _speedHistory.length - 1; i++) {
+      final DateTime sampleTime = _speedHistory[i]['time'] as DateTime;
+      final int ageMs = now.difference(sampleTime).inMilliseconds;
+      if (ageMs <= _kGpsDecelWindowMs) {
+        referenceEntry = _speedHistory[i];
+        break;
       }
     }
+    referenceEntry ??= _speedHistory.first;
 
-    _lastYaw          = yaw;
-    _lastYawTimestamp = now;
+    final double refSpeed  = referenceEntry['speed'] as double;
+    final DateTime refTime = referenceEntry['time'] as DateTime;
+    final double dtSec     = now.difference(refTime).inMilliseconds / 1000.0;
+    if (dtSec < 0.1) return;
 
-    // BUG 8 FIX: millisecond precision purge
-    while (_yawRateBuffer.isNotEmpty &&
-        now.difference(_yawRateBuffer.first.time).inMilliseconds >= 1000) {
-      _yawRateBuffer.removeFirst();
-    }
-  }
+    final double speedDerivKmhPerS = (currentSpeedKmh - refSpeed) / dtSec;
 
-  // ==================== STRESS TRIGGERS ====================
-  Future<void> _checkStressTriggers(String userId) async {
-    if (_isTrackMode) return;
-
-    try {
-      final profile = await DriverProfileService.getCachedProfile(userId);
-      if (profile == null) return;
-
-      final triggers = List<String>.from(profile['stressTriggers'] ?? []);
-      _activeTriggers = triggers;
-      if (triggers.isEmpty) return;
-
-      final hour = DateTime.now().hour;
-      if (triggers.contains('Morning Rush (6-10 AM)') && hour >= 6 && hour < 10) {
-        _triggerPreventativeAlert('Morning Rush Detected',
-            'You tend to be more rushed at this time. Take a deep breath and drive smoothly.');
-      } else if (triggers.contains('Evening Traffic (4-10 PM)') &&
-          hour >= 16 &&
-          hour < 22) {
-        _triggerPreventativeAlert('Evening Rush Detected',
-            'Traffic might be heavy. Patience is your best fuel saver right now.');
-      } else if (triggers.contains('Late Night Driving') &&
-          (hour >= 22 || hour < 5)) {
-        _triggerPreventativeAlert('Late Night Drive',
-            'Visibility is lower. Keep your speed steady and eyes scanning.');
+    if (!_isDecelerating) {
+      if (speedDerivKmhPerS < -_kGpsDecelThresholdKmhPerS) {
+        _gpsDecelConfirmCount++;
+        _gpsAccelConfirmCount = 0;
+        if (_gpsDecelConfirmCount >= _kGpsDecelConfirmSamples) {
+          _isDecelerating       = true;
+          _gpsDecelConfirmCount = 0;
+          debugPrint(
+            '🔴 GPS Decel confirmed: ${speedDerivKmhPerS.toStringAsFixed(1)} km/h/s',
+          );
+        }
+      } else {
+        _gpsDecelConfirmCount = 0;
       }
-    } catch (e) {
-      debugPrint('Failed to check stress triggers: $e');
+    } else {
+      if (speedDerivKmhPerS >= -(_kGpsDecelThresholdKmhPerS * 0.5)) {
+        _gpsAccelConfirmCount++;
+        _gpsDecelConfirmCount = 0;
+        if (_gpsAccelConfirmCount >= _kGpsAccelConfirmSamples) {
+          _isDecelerating       = false;
+          _gpsAccelConfirmCount = 0;
+          debugPrint('🟢 GPS Accel confirmed — exiting DECEL mode');
+        }
+      } else {
+        _gpsAccelConfirmCount = 0;
+      }
+
+      if (currentSpeedKmh < _kMinSpeedForReversalKmh) {
+        _isDecelerating       = false;
+        _gpsDecelConfirmCount = 0;
+        _gpsAccelConfirmCount = 0;
+      }
     }
   }
 
-  void _triggerPreventativeAlert(String title, String body) {
-    if (_hasWarnedAboutTimeTrigger) return;
-    Future.delayed(const Duration(seconds: 5), () {
-      if (!_isMonitoring) return;
-      _coachingService.triggerFeedback(
-        message: body,
-        vibrationPattern: [0, 200],
-      );
-      _hasWarnedAboutTimeTrigger = true;
-      debugPrint('⚠️ Preventative Alert (haptic+voice): $title');
-    });
-  }
-
-  // ==============================================================================
-  // DIRECTION REVERSAL DETECTION (gravity-removed linear acceleration)
-  //
-  // BUG 1 FIX: Explicit reset path — magnitude-settle exits decel mode
-  //            regardless of angle, with a symmetric re-entry counter.
-  // BUG 2 FIX: Anchor vector locked at first suspicion; held fixed for the
-  //            entire hysteresis window so the reference doesn't drift.
-  // BUG 3 FIX: Operates on gravity-removed linear accel (linX/Y/Z), not
-  //            raw phone-frame axes.
-  // BUG 4 FIX: Flag is hysteresis-gated; no single-sample flip artefacts.
-  // ==============================================================================
-  void _detectDirectionReversal(
+  // ============================================================================
+  // IMU DIRECTION REVERSAL (TRACK MODE ONLY)
+  // ============================================================================
+  void _detectDirectionReversalImu(
       double linX,
       double linY,
       double linZ,
       double magnitude,
       ) {
-    // --- Settle check: if net linear acceleration is negligible, neutral state ---
     if (magnitude < magnitudeSettledThreshold) {
-      // BUG 1 FIX: Always reset decel flag on settle, irrespective of angle
       _isDecelerating       = false;
       _reversalConfirmCount = 0;
       _accelReentryCount    = 0;
@@ -771,7 +715,6 @@ class VehicleMonitorService {
       return;
     }
 
-    // --- If we don't have an anchor yet, set it now ---
     if (_anchorLinX == null) {
       _anchorLinX = linX;
       _anchorLinY = linY;
@@ -786,94 +729,150 @@ class VehicleMonitorService {
     );
 
     if (anchorMag < 0.01) {
-      // Degenerate anchor — refresh it
-      _anchorLinX = linX;
-      _anchorLinY = linY;
-      _anchorLinZ = linZ;
+      _anchorLinX = linX; _anchorLinY = linY; _anchorLinZ = linZ;
       return;
     }
 
-    final double dotProduct =
-        (_anchorLinX! * linX) +
-            (_anchorLinY! * linY) +
-            (_anchorLinZ! * linZ);
-
-    final double cosTheta =
-    (dotProduct / (anchorMag * magnitude)).clamp(-1.0, 1.0);
+    final double cosTheta = (
+        (_anchorLinX! * linX + _anchorLinY! * linY + _anchorLinZ! * linZ) /
+            (anchorMag * magnitude)
+    ).clamp(-1.0, 1.0);
     final double angleDegrees = acos(cosTheta) * (180.0 / pi);
 
     if (!_isDecelerating) {
-      // --- Trying to ENTER deceleration ---
       if (angleDegrees > directionReversalThreshold) {
         _reversalConfirmCount++;
         _accelReentryCount = 0;
-        // BUG 2 FIX: Anchor is NOT updated during hysteresis window —
-        // it stays locked to the pre-reversal direction for stable comparison.
         if (_reversalConfirmCount >= _kReversalHysteresisCount) {
           _isDecelerating       = true;
           _reversalConfirmCount = 0;
-          // Commit anchor to current direction now that decel is confirmed
-          _anchorLinX = linX;
-          _anchorLinY = linY;
-          _anchorLinZ = linZ;
-          debugPrint('🔴 Deceleration confirmed — DECEL mode');
+          _anchorLinX = linX; _anchorLinY = linY; _anchorLinZ = linZ;
         }
       } else {
-        // Angle not large enough — reset hysteresis and keep updating anchor
         _reversalConfirmCount = 0;
-        _anchorLinX = linX;
-        _anchorLinY = linY;
-        _anchorLinZ = linZ;
+        _anchorLinX = linX; _anchorLinY = linY; _anchorLinZ = linZ;
       }
     } else {
-      // --- Currently decelerating — watch for return to acceleration ---
-      // BUG 1 FIX: Re-entry requires _kAccelReentryCount consecutive samples
-      // below the reversal threshold (symmetric hysteresis on exit).
       if (angleDegrees <= directionReversalThreshold) {
         _accelReentryCount++;
         if (_accelReentryCount >= _kAccelReentryCount) {
           _isDecelerating       = false;
           _accelReentryCount    = 0;
           _reversalConfirmCount = 0;
-          // Reset anchor to current direction for next detection cycle
-          _anchorLinX = linX;
-          _anchorLinY = linY;
-          _anchorLinZ = linZ;
-          debugPrint('🟢 Re-entry confirmed — ACCEL mode');
+          _anchorLinX = linX; _anchorLinY = linY; _anchorLinZ = linZ;
         }
-        // Do NOT update anchor during re-entry hysteresis window
       } else {
-        // Still decelerating — keep anchor current
         _accelReentryCount = 0;
-        _anchorLinX        = linX;
-        _anchorLinY        = linY;
-        _anchorLinZ        = linZ;
+        _anchorLinX = linX; _anchorLinY = linY; _anchorLinZ = linZ;
       }
     }
   }
 
-  // ==============================================================================
-  // TURN DETECTION
-  //
-  // BUG 8 FIX: Evaluated from GPS stream (not 100Hz accel callback) so the
-  //            evaluation rate matches the yaw buffer update rate.
-  // BUG 9 FIX: Cooldown guard moved to AFTER the duration check so consecutive
-  //            turns (S-curves) accumulate properly during the cooldown window.
-  // ==============================================================================
+  // ==================== FETCH PERSONALIZED THRESHOLDS ====================
+  Future<void> _fetchDynamicThresholdModifiers(String userId) async {
+    try {
+      final profile = await DriverProfileService.getCachedProfile(userId);
+      if (profile != null && profile['thresholdModifiers'] != null) {
+        final mods = profile['thresholdModifiers'];
+        _jerkMultiplier = (mods['jerkThresholdMultiplier'] ?? 1.0).toDouble();
+        _yawMultiplier  = (mods['yawThresholdMultiplier']  ?? 1.0).toDouble();
+        debugPrint(
+          '🔧 Personalized Modifiers — Jerk: $_jerkMultiplier, Yaw: $_yawMultiplier',
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to load threshold modifiers: $e');
+    }
+  }
+
+  // ==================== COMPASS YAW FALLBACK ====================
+  void _calculateCompassYawFallback(
+      UserAccelerometerEvent accel,
+      MagnetometerEvent mag,
+      DateTime now,
+      ) {
+    final double normA =
+    sqrt(accel.x * accel.x + accel.y * accel.y + accel.z * accel.z);
+    if (normA == 0) return;
+
+    final double ax = accel.x / normA;
+    final double ay = accel.y / normA;
+    final double az = accel.z / normA;
+    final double pitch = atan2(-ax, sqrt(ay * ay + az * az));
+    final double roll  = atan2(ay, az);
+
+    final double magXComp = mag.x * cos(pitch) +
+        mag.y * sin(pitch) * sin(roll) +
+        mag.z * sin(pitch) * cos(roll);
+    final double magYComp = mag.y * cos(roll) - mag.z * sin(roll);
+    final double yaw = atan2(-magYComp, magXComp);
+
+    if (_lastYaw != null && _lastYawTimestamp != null) {
+      final double dt =
+          now.difference(_lastYawTimestamp!).inMicroseconds / 1e6;
+      if (dt > 0) {
+        double dYaw = yaw - _lastYaw!;
+        if (dYaw > pi)  dYaw -= 2 * pi;
+        if (dYaw < -pi) dYaw += 2 * pi;
+        _yawRateBuffer.add(TimeStampedValue(now, dYaw / dt));
+      }
+    }
+    _lastYaw          = yaw;
+    _lastYawTimestamp = now;
+
+    while (_yawRateBuffer.isNotEmpty &&
+        now.difference(_yawRateBuffer.first.time).inMilliseconds >= 1000) {
+      _yawRateBuffer.removeFirst();
+    }
+  }
+
+  // ==================== STRESS TRIGGERS ====================
+  Future<void> _checkStressTriggers(String userId) async {
+    if (_isTrackMode) return;
+    try {
+      final profile = await DriverProfileService.getCachedProfile(userId);
+      if (profile == null) return;
+      final triggers = List<String>.from(profile['stressTriggers'] ?? []);
+      _activeTriggers = triggers;
+      if (triggers.isEmpty) return;
+      final int hour = DateTime.now().hour;
+      if (triggers.contains('Morning Rush (6-10 AM)') && hour >= 6 && hour < 10) {
+        _triggerPreventativeAlert('Morning Rush Detected',
+            'You tend to be more rushed at this time. Take a deep breath and drive smoothly.');
+      } else if (triggers.contains('Evening Traffic (4-10 PM)') && hour >= 16 && hour < 22) {
+        _triggerPreventativeAlert('Evening Rush Detected',
+            'Traffic might be heavy. Patience is your best fuel saver right now.');
+      } else if (triggers.contains('Late Night Driving') && (hour >= 22 || hour < 5)) {
+        _triggerPreventativeAlert('Late Night Drive',
+            'Visibility is lower. Keep your speed steady and eyes scanning.');
+      }
+    } catch (e) {
+      debugPrint('Failed to check stress triggers: $e');
+    }
+  }
+
+  void _triggerPreventativeAlert(String title, String body) {
+    if (_hasWarnedAboutTimeTrigger) return;
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!_isMonitoring) return;
+      _coachingService.triggerFeedback(message: body, vibrationPattern: [0, 200]);
+      _hasWarnedAboutTimeTrigger = true;
+      debugPrint('⚠️ Preventative Alert: $title');
+    });
+  }
+
+  // ==================== TURN DETECTION ====================
   void _detectTurn() {
     if (_isTrackMode) return;
-
     if (_yawRateBuffer.isEmpty || currentSpeedKmh < _t.minSpeedThresholdKmh) {
       _resetTurnState();
       return;
     }
 
-    // Mean Yaw Rate over the 1-second window
     final double meanYawRate =
         _yawRateBuffer.map((e) => e.value).reduce((a, b) => a + b) /
             _yawRateBuffer.length;
 
-    // Apply dynamic driver-specific multiplier
     if (meanYawRate.abs() > (_t.yawRateThreshold * _yawMultiplier)) {
       if (_turnStartTime == null) {
         _turnStartTime   = DateTime.now();
@@ -887,22 +886,16 @@ class VehicleMonitorService {
           DateTime.now().difference(_turnStartTime!).inMilliseconds;
 
       if (durationMs >= _t.turnDurationMs) {
-        // Gyro fusion confirmation gate
-        if (_useGyroscopeFusion) {
-          if (_smoothedGyroZ.abs() <= _t.gyroRotationThreshold) {
-            debugPrint('⚠️ Turn rejected: no gyro rotation');
-            _resetTurnState();
-            return;
-          }
+        if (_useGyroscopeFusion &&
+            _smoothedGyroZ.abs() <= _t.gyroRotationThreshold) {
+          debugPrint('⚠️ Turn rejected: no gyro rotation');
+          _resetTurnState();
+          return;
         }
 
-        // BUG 9 FIX: Cooldown check is now here — AFTER duration is satisfied.
-        // This lets the turn accumulate state during the cooldown window so
-        // back-to-back turns are not silently swallowed.
         if (_lastTurnDetection != null &&
             DateTime.now().difference(_lastTurnDetection!) <
                 Duration(seconds: _t.turnCooldownSeconds)) {
-          // Cooldown active — reset and wait for next turn
           _resetTurnState();
           return;
         }
@@ -915,14 +908,11 @@ class VehicleMonitorService {
         }
 
         _analyzeTurnQuality(
-          _turnEntrySpeed ?? currentSpeedKmh,
-          currentSpeedKmh,
-          _turnPeakYawRate,
-        );
+            _turnEntrySpeed ?? currentSpeedKmh, currentSpeedKmh, _turnPeakYawRate);
         _feedbackService.evaluateTurn(_turnPeakYawRate, currentSpeedKmh);
 
         debugPrint(
-          '🔄 Turn: $direction | Peak Yaw Rate: ${_turnPeakYawRate.toStringAsFixed(2)} rad/s | '
+          '🔄 Turn: $direction | Peak: ${_turnPeakYawRate.toStringAsFixed(2)} rad/s | '
               '${durationMs}ms | ${currentSpeedKmh.toStringAsFixed(0)} km/h',
         );
 
@@ -946,26 +936,18 @@ class VehicleMonitorService {
         Duration(seconds: _t.notificationCooldownSeconds);
   }
 
-  // ==============================================================================
-  // CRASH DETECTION — ACCELERATION
-  //
-  // BUG 10 FIX: Uses unsigned magnitude for fluctuation check.
-  //             Sign flip artefacts from _isDecelerating no longer trigger
-  //             false crash alerts.
-  // ==============================================================================
+  // ==================== CRASH — ACCELERATION ====================
   void _checkCrashFromAcceleration(
       BuildContext context,
       WidgetRef ref,
       double avgMagnitude,
       ) {
     if (_isTrackMode) return;
-
     if (_lastCrashDetection != null &&
         DateTime.now().difference(_lastCrashDetection!) <
             Duration(seconds: _t.crashCooldownSeconds)) return;
     if (_rawAccelMagnitudes.length < 2) return;
 
-    // BUG 10 FIX: Both values are unsigned — no sign-flip artefacts
     final double accelFluctuation =
         _rawAccelMagnitudes[_rawAccelMagnitudes.length - 1] -
             _rawAccelMagnitudes[_rawAccelMagnitudes.length - 2];
@@ -975,15 +957,9 @@ class VehicleMonitorService {
     }
   }
 
-  // ==============================================================================
-  // CRASH DETECTION — SPEED DROP
-  //
-  // BUG 11 FIX: delTime window widened to 2.5s and gated on GPS accuracy < 15m
-  //             (accuracy gate enforced in the GPS stream before this is called).
-  // ==============================================================================
+  // ==================== CRASH — SPEED DROP ====================
   void _checkCrashFromSpeedDrop(BuildContext context, WidgetRef ref) {
     if (_isTrackMode) return;
-
     if (_lastCrashDetection != null &&
         DateTime.now().difference(_lastCrashDetection!) <
             Duration(seconds: _t.crashCooldownSeconds)) return;
@@ -1000,7 +976,6 @@ class VehicleMonitorService {
     final double delSpeed =
         (recent['speed'] as double) - (previous['speed'] as double);
 
-    // BUG 11 FIX: Widened delTime window to 2.5 s to handle GPS update gaps
     if (delSpeed < -_t.crashSpeedDropLimit && delTime < 2.5) {
       _triggerCrashDetection(context, ref);
     }
@@ -1009,9 +984,7 @@ class VehicleMonitorService {
   void _triggerCrashDetection(BuildContext context, WidgetRef ref) {
     _lastCrashDetection = DateTime.now();
     debugPrint('CRASH DETECTED — triggering crash protocol');
-
     sendNotification('Crash Detected', 'Possible impact detected');
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (context.mounted) {
         CrashDetector.checkForCrash(context, ref, onDialogClosed: () {
@@ -1021,6 +994,7 @@ class VehicleMonitorService {
     });
   }
 
+  // ==================== STOP MONITORING ====================
   Future<void> stopMonitoring(WidgetRef ref, {double? manualMileage}) async {
     _accelSub?.cancel();
     _magSub?.cancel();
@@ -1086,48 +1060,48 @@ class VehicleMonitorService {
           await Future.delayed(const Duration(milliseconds: 500));
 
           // =================================================================
-          // 🛑 NEW: GUARDIAN SAFETY FEATURE (AUTO SMS)
+          // 🛑 GUARDIAN SAFETY FEATURE (AUTO SMS)
           // =================================================================
           try {
-            // 1. Fetch user data to check age
-            final userDoc = await firestore.collection('users').doc(_userId).get();
+            final userDoc =
+            await firestore.collection('users').doc(_userId).get();
             if (userDoc.exists) {
-              final age = userDoc.data()?['age'];
+              final age             = userDoc.data()?['age'];
               final guardianContact = userDoc.data()?['guardianContact'];
 
-              // 2. Check if minor AND has a guardian contact
-              if (age != null && age < 18 && guardianContact != null && guardianContact.toString().isNotEmpty) {
-
-                final driverName = userDoc.data()?['name'] ?? 'The driver';
-                final dist = (totalDistanceMeters / 1000).toStringAsFixed(1);
+              if (age != null &&
+                  age < 18 &&
+                  guardianContact != null &&
+                  guardianContact.toString().isNotEmpty) {
+                final driverName =
+                    userDoc.data()?['name'] ?? 'The driver';
+                final dist   = (totalDistanceMeters / 1000).toStringAsFixed(1);
                 final maxSpd = summary['maxSpeedKmh']?.toStringAsFixed(0) ?? '0';
                 final hBrakes = summary['harshBrakes'] ?? 0;
                 final hAccels = summary['harshAccelerations'] ?? 0;
 
-                // 3. Format the SMS
-                String smsMessage = "🛡️ RAXXY Guardian Alert:\n"
+                final String smsMessage =
+                    "🛡️ RAXXY Guardian Alert:\n"
                     "$driverName has finished driving.\n"
                     "• Distance: $dist km\n"
                     "• Max Speed: $maxSpd km/h\n"
                     "• Harsh Brakes: $hBrakes\n"
                     "• Harsh Accels: $hAccels";
 
-                // 4. Send the SMS silently in the background
                 try {
-
                   await sendSMS(
                     message: smsMessage,
                     recipients: [guardianContact],
                     sendDirect: true,
                   );
-                  debugPrint("✅ Guardian Summary SMS sent successfully!");
+                  debugPrint('✅ Guardian SMS sent!');
                 } catch (smsError) {
-                  debugPrint("❌ Failed to send Guardian SMS: $smsError");
+                  debugPrint('❌ Guardian SMS failed: $smsError');
                 }
               }
             }
           } catch (e) {
-            debugPrint("❌ Error checking guardian status: $e");
+            debugPrint('❌ Guardian check error: $e');
           }
           // =================================================================
 
@@ -1219,11 +1193,7 @@ class VehicleMonitorService {
     }
   }
 
-  // ==============================================================================
-  // ACCIDENT RISK
-  //
-  // BUG 14 FIX: Now called from the 500ms timer — risk score is live.
-  // ==============================================================================
+  // ==================== ACCIDENT RISK ====================
   void _calculateAccidentRisk(WidgetRef ref) {
     if (_isTrackMode) return;
 
@@ -1233,20 +1203,17 @@ class VehicleMonitorService {
     if (_sessionService.harshBrakeEvents > 2)  risk += 20;
     final int hour = DateTime.now().hour;
     if (hour >= 22 || hour < 5)                risk += 10;
-
     if (_turnPeakYawRate > (1.2 * _yawMultiplier)) risk += 15;
 
     _currentRiskScore = risk;
-    _currentRiskLevel =
-    risk <= 30 ? 'Low' : risk <= 60 ? 'Medium' : 'High';
+    _currentRiskLevel = risk <= 30 ? 'Low' : risk <= 60 ? 'Medium' : 'High';
 
     ref.read(vehicleMonitorProvider.notifier)
         .updateRisk(_currentRiskScore, _currentRiskLevel);
 
     if (_lastRiskAlert == null ||
         DateTime.now().difference(_lastRiskAlert!) > _kRiskCooldown) {
-      _feedbackService.evaluateAccidentRisk(
-          _currentRiskLevel, _currentRiskScore);
+      _feedbackService.evaluateAccidentRisk(_currentRiskLevel, _currentRiskScore);
       _lastRiskAlert = DateTime.now();
     }
   }
