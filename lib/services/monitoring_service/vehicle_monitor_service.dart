@@ -3,7 +3,7 @@ import 'dart:math';
 import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_sms/flutter_sms.dart';
+import 'package:raxxy/screens/guardian_alert_screen.dart';
 import 'package:raxxy/services/crash_detector.dart';
 import 'package:raxxy/services/monitoring_service/session_summary_service.dart';
 import 'package:raxxy/services/monitoring_service/driving_score_service.dart';
@@ -1086,7 +1086,7 @@ class VehicleMonitorService {
           await Future.delayed(const Duration(milliseconds: 500));
 
           // =================================================================
-          // 🛑 NEW: GUARDIAN SAFETY FEATURE (AUTO SMS)
+          // 🛑 GUARDIAN SAFETY FEATURE (NAVIGATE TO ALERT SCREEN)
           // =================================================================
           try {
             // 1. Fetch user data to check age
@@ -1104,25 +1104,22 @@ class VehicleMonitorService {
                 final hBrakes = summary['harshBrakes'] ?? 0;
                 final hAccels = summary['harshAccelerations'] ?? 0;
 
-                // 3. Format the SMS
-                String smsMessage = "🛡️ RAXXY Guardian Alert:\n"
-                    "$driverName has finished driving.\n"
-                    "• Distance: $dist km\n"
-                    "• Max Speed: $maxSpd km/h\n"
-                    "• Harsh Brakes: $hBrakes\n"
-                    "• Harsh Accels: $hAccels";
-
-                // 4. Send the SMS silently in the background
-                try {
-
-                  await sendSMS(
-                    message: smsMessage,
-                    recipients: [guardianContact],
-                    sendDirect: true,
+                // 3. Navigate to the Guardian Alert Screen
+                final ctx = _monitoringContext;
+                if (ctx != null && ctx.mounted) {
+                  await Navigator.push(
+                    ctx,
+                    MaterialPageRoute(
+                      builder: (_) => GuardianAlertScreen(
+                        driverName: driverName,
+                        distance: dist,
+                        maxSpeed: maxSpd,
+                        harshBrakes: hBrakes,
+                        harshAccelerations: hAccels,
+                        guardianContact: guardianContact.toString(),
+                      ),
+                    ),
                   );
-                  debugPrint("✅ Guardian Summary SMS sent successfully!");
-                } catch (smsError) {
-                  debugPrint("❌ Failed to send Guardian SMS: $smsError");
                 }
               }
             }
