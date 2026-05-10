@@ -41,45 +41,29 @@ class VehicleMonitorService {
   double _yawMultiplier  = 1.0;
 
   // ── LPF Alphas ──────────────────────────────────────────────────────────────
-  // UI display smoothing — moderate, applied to gravity-removed linear axes.
+  // UI display smoothing — moderate, applied to longitudinal axis.
   static const double _kLpfAlphaUi = 0.20;
 
-  // FIX A — Gravity LPF alpha.
-  // 0.98 was so slow that a phone mounted at any angle took ~2.5 s to converge,
-  // causing a 7-10 m/s² idle reading.  0.90 converges in ~10 samples (~100 ms)
-  // which is fast enough to not pollute the first jerk window while still
-  // treating gravity as the DC component.
-  static const double _kGravityAlpha = 0.90;
-
-  // FIX B — Complementary filter: how much the gyroscope "corrects" the gravity
-  // direction every sample. Prevents sustained cornering G from bleeding into
-  // the gravity estimate and suppressing real acceleration to near-zero.
-  // Formula:  grav_corrected = (1 - _kGyroTiltBlend) * grav_lpf
-  //                          + _kGyroTiltBlend * gravity_from_gyro_integration
-  // A value of 0.02 means 2 % gyro correction per sample @ ~100 Hz → ~2 s
-  // time-constant for tilt correction without fighting the LPF.
-  static const double _kGyroTiltBlend = 0.02;
+  // Heavy LPF for jerk source signal — removes vibration before
+  // computing rate-of-change. Prevents speed bumps from inflating jerk.
+  static const double _kLpfAlphaJerk = 0.08;
 
   // Gyro fusion — more responsive alpha so fast turns reach the gate
   static const double _kGyroAlpha = 0.50;
 
-  // ── Gravity state ────────────────────────────────────────────────────────────
-  // Initialised to NaN so we can detect the very first sample and seed
-  // directly — this eliminates the 2.5 s warmup spike entirely (FIX A).
-  double _gravX = double.nan;
-  double _gravY = double.nan;
-  double _gravZ = double.nan;
+  // ── Sensor States ────────────────────────────────────────────────────────────
+  bool _isFirstAccelSample = true;
 
-  // Raw gyro (un-smoothed) for complementary tilt correction
-  double _rawGyroX = 0.0;
-  double _rawGyroY = 0.0;
-  // _smoothedGyroZ used for turn gate (declared below)
-
-  // UI smoothed axes (gravity-removed)
-  double _uiLpfX = 0.0;
-  double _uiLpfY = 0.0;
-  double _uiLpfZ = 0.0;
+  // UI smoothed axis (longitudinal)
+  double _uiLpfVal = 0.0;
   double _smoothedUiAcceleration = 0.0;
+
+  // Jerk-source LPF state (3-axis for orientation-invariant magnitude)
+  double _jerkLpfX = 0.0;
+  double _jerkLpfY = 0.0;
+  double _jerkLpfZ = 0.0;
+
+  // _smoothedGyroZ used for turn gate (declared below)
 
   // Minimum GPS speed (km/h) below which direction-reversal logic is skipped.
   static const double _kMinSpeedForReversalKmh = 3.0;
@@ -89,15 +73,9 @@ class VehicleMonitorService {
   static const int _kAccelReentryCount       = 3;
 
   // ── GPS-speed derivative deceleration detector ───────────────────────────────
-  // FIX C — replaces the unreliable IMU angle-based direction flag.
-  // We compare the current GPS speed to the smoothed GPS speed from
-  // _kGpsDecelWindowMs ago. If the vehicle is losing speed faster than
-  // _kGpsDecelThresholdKmhPerS km/h per second, we are decelerating.
   static const double _kGpsDecelThresholdKmhPerS = 1.5; // ~0.42 m/s² — light braking
   static const int    _kGpsDecelWindowMs         = 800;  // look-back window
-  // Hysteresis: GPS decel flag must be seen for this many GPS updates before commit
   static const int    _kGpsDecelConfirmSamples   = 1;
-  // And must be gone for this many updates before releasing decel mode
   static const int    _kGpsAccelConfirmSamples   = 2;
 
   int _gpsDecelConfirmCount = 0;
@@ -108,7 +86,7 @@ class VehicleMonitorService {
   final RacingTelemetryService _telemetryService = RacingTelemetryService();
   RacingTelemetryService get telemetry => _telemetryService;
 
-  final TelemetryLogger _logger = TelemetryLogger();
+  // final TelemetryLogger _logger = TelemetryLogger();
 
   // ==================== ACCIDENT RISK ====================
   double    _currentRiskScore = 0;
@@ -155,7 +133,7 @@ class VehicleMonitorService {
 
   // ==================== JERK ====================
   final Queue<TimeStampedValue> _jerkBuffer = Queue();
-  double?   _lastLinearMagnitude;
+  double?   _lastJerkMagnitude;
   DateTime? _lastAccelTimestamp;
 
   // Crash detection buffer — unsigned magnitude only
@@ -201,21 +179,15 @@ class VehicleMonitorService {
   final bool _useGyroscopeFusion = true;
 
   // ==================== DIRECTION / DECELERATION STATE ====================
-  // FIX C: _isDecelerating is now driven by GPS speed derivative, not IMU angles.
-  // The IMU anchor fields are kept only for track-mode telemetry — they are no
-  // longer used for the braking/accel classification in normal mode.
   bool _isDecelerating = false;
 
-  // Legacy IMU anchor — retained for _detectDirectionReversalImu() which is
-  // now only called in track mode (where GPS bearing is also available but
-  // we keep the IMU path for high-frequency telemetry).
+  // Legacy IMU anchor — retained for _detectDirectionReversalImu() (track mode)
   double? _anchorLinX;
   double? _anchorLinY;
   double? _anchorLinZ;
   int     _reversalConfirmCount = 0;
   int     _accelReentryCount    = 0;
 
-  // FIX C: settled-threshold is kept for the UI magnitude display only.
   final double magnitudeSettledThreshold  = 0.3; // lowered — pure vibration floor
   final double directionReversalThreshold = 150.0; // kept for track mode
 
@@ -244,19 +216,15 @@ class VehicleMonitorService {
 
     _jerkMultiplier = 1.0;
     _yawMultiplier  = 1.0;
-    _uiLpfX = 0.0;
-    _uiLpfY = 0.0;
-    _uiLpfZ = 0.0;
+
+    // Reset LPF pipelines
+    _uiLpfVal = 0.0;
     _smoothedUiAcceleration = 0.0;
+    _jerkLpfX = 0.0;
+    _jerkLpfY = 0.0;
+    _jerkLpfZ = 0.0;
+    _isFirstAccelSample = true;
 
-    // FIX A: Reset gravity to NaN so the first real sample seeds it instantly.
-    _gravX = double.nan;
-    _gravY = double.nan;
-    _gravZ = double.nan;
-    _rawGyroX = 0.0;
-    _rawGyroY = 0.0;
-
-    // FIX C: Reset GPS decel detector
     _isDecelerating       = false;
     _gpsDecelConfirmCount = 0;
     _gpsAccelConfirmCount = 0;
@@ -269,7 +237,7 @@ class VehicleMonitorService {
 
     _sessionService.startSession();
     _telemetryService.reset();
-    await _logger.startLogging();
+    // await _logger.startLogging();
 
     _lastCrashDetection    = null;
     _consecutiveHarshAccel = 0;
@@ -290,7 +258,7 @@ class VehicleMonitorService {
 
     _jerkBuffer.clear();
     _yawRateBuffer.clear();
-    _lastLinearMagnitude = null;
+    _lastJerkMagnitude   = null;
     _lastAccelTimestamp  = null;
     _rawAccelMagnitudes.clear();
     _speedHistory.clear();
@@ -433,16 +401,14 @@ class VehicleMonitorService {
 
     // ── MAGNETOMETER ──────────────────────────────────────────────────────────
     _magSub = magnetometerEvents.listen((event) {
-      _logger.logMagnetometer(event);
+      // _logger.logMagnetometer(event);
       currentMagnetometer = event;
     });
 
     // ── GYROSCOPE ─────────────────────────────────────────────────────────────
     if (_useGyroscopeFusion) {
       _gyroSub = gyroscopeEvents.listen((GyroscopeEvent event) {
-        _logger.logGyroscope(event);
-        _rawGyroX  = event.x;
-        _rawGyroY  = event.y;
+        // _logger.logGyroscope(event);
         _smoothedGyroZ =
             (_kGyroAlpha * event.z) + ((1 - _kGyroAlpha) * _smoothedGyroZ);
       });
@@ -451,91 +417,63 @@ class VehicleMonitorService {
 
     // ── ACCELEROMETER ─────────────────────────────────────────────────────────
     _accelSub = userAccelerometerEvents.listen((event) {
-      _logger.logAccelerometer(event);
+      // _logger.logAccelerometer(event);
 
       final DateTime now = DateTime.now();
       currentAcceleration = event;
 
-      // ── FIX A: First-sample seeding ─────────────────────────────────────
-      if (_gravX.isNaN) {
-        _gravX = event.x;
-        _gravY = event.y;
-        _gravZ = event.z;
-        // Seed UI LPF too so it starts at zero linear accel
-        _uiLpfX = 0.0;
-        _uiLpfY = 0.0;
-        _uiLpfZ = 0.0;
-        return; // Skip the rest for this single seed sample
+      // ── First-sample seeding ──────────────────────────────────────────
+      if (_isFirstAccelSample) {
+        _isFirstAccelSample = false;
+        _uiLpfVal = event.z;
+        _jerkLpfX = event.x;
+        _jerkLpfY = event.y;
+        _jerkLpfZ = event.z;
+        _lastAccelTimestamp = now;
+        _lastJerkMagnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+        return;
       }
 
-      // ── FIX A + B: Complementary gravity update ──────────────────────────
-      double gx = _kGravityAlpha * _gravX + (1 - _kGravityAlpha) * event.x;
-      double gy = _kGravityAlpha * _gravY + (1 - _kGravityAlpha) * event.y;
-      double gz = _kGravityAlpha * _gravZ + (1 - _kGravityAlpha) * event.z;
-
-      if (_useGyroscopeFusion) {
-        if (_lastAccelTimestamp != null) {
-          final double dt =
-              now.difference(_lastAccelTimestamp!).inMicroseconds / 1e6;
-          if (dt > 0.001 && dt < 0.1) {
-            final double dGx = ( _rawGyroY * gz - 0            ) * dt;
-            final double dGy = ( 0          * 0  - _rawGyroX * gz) * dt;
-            final double dGz = ( _rawGyroX * gy  - _rawGyroY * gx) * dt;
-
-            gx += _kGyroTiltBlend * dGx;
-            gy += _kGyroTiltBlend * dGy;
-            gz += _kGyroTiltBlend * dGz;
-          }
-        }
-      }
-
-      _gravX = gx;
-      _gravY = gy;
-      _gravZ = gz;
-
-      // ── Gravity-removed linear acceleration ──────────────────────────────
-      final double linX = event.x - _gravX;
-      final double linY = event.y - _gravY;
-      final double linZ = event.z - _gravZ;
+      // Linear Acceleration (gravity already removed by sensor_plus)
+      final double linX = event.x;
+      final double linY = event.y;
+      final double linZ = event.z;
 
       final double linearMagnitude =
       sqrt(linX * linX + linY * linY + linZ * linZ);
 
-      // ── FIX C: _isDecelerating is set by GPS in the position stream. ─────
+      // ── _isDecelerating is set by GPS in the position stream. ─────
       if (_isTrackMode) {
         _detectDirectionReversalImu(linX, linY, linZ, linearMagnitude);
       }
 
-      // ── UI smoothing (gravity-removed axes) ──────────────────────────────
-      // MOVED ABOVE JERK CALCULATION SO WE CAN USE IT FOR PHYSICAL JERK
-      _uiLpfX = (_kLpfAlphaUi * linX) + ((1 - _kLpfAlphaUi) * _uiLpfX);
-      _uiLpfY = (_kLpfAlphaUi * linY) + ((1 - _kLpfAlphaUi) * _uiLpfY);
-      _uiLpfZ = (_kLpfAlphaUi * linZ) + ((1 - _kLpfAlphaUi) * _uiLpfZ);
-
-      final double uiMagnitude =
-      sqrt(_uiLpfX * _uiLpfX + _uiLpfY * _uiLpfY + _uiLpfZ * _uiLpfZ);
-      _smoothedUiAcceleration = _isDecelerating ? -uiMagnitude : uiMagnitude;
+      // ── UI smoothing (Longitudinal axis) ──────────────────────────────
+      // Longitudinal axis (z) gives naturally signed acceleration:
+      // ~0 at constant speed, positive = accel, negative = braking
+      _uiLpfVal = (_kLpfAlphaUi * linZ) + ((1 - _kLpfAlphaUi) * _uiLpfVal);
+      _smoothedUiAcceleration = _uiLpfVal;
 
       // Crash detection buffer — unsigned
       _rawAccelMagnitudes.add(linearMagnitude);
       if (_rawAccelMagnitudes.length > 5) _rawAccelMagnitudes.removeAt(0);
 
+      // ── Jerk pipeline: heavy LPF then magnitude (orientation-invariant) ──
+      _jerkLpfX = (_kLpfAlphaJerk * linX) + ((1 - _kLpfAlphaJerk) * _jerkLpfX);
+      _jerkLpfY = (_kLpfAlphaJerk * linY) + ((1 - _kLpfAlphaJerk) * _jerkLpfY);
+      _jerkLpfZ = (_kLpfAlphaJerk * linZ) + ((1 - _kLpfAlphaJerk) * _jerkLpfZ);
+
+      final double jerkMagnitude =
+      sqrt(_jerkLpfX * _jerkLpfX + _jerkLpfY * _jerkLpfY + _jerkLpfZ * _jerkLpfZ);
+
       // ── Jerk calculation ─────────────────────────────────────────────────
-      // PATCH: Use the vibration-smoothed UI acceleration to calculate physical jerk
-      if (_lastLinearMagnitude != null && _lastAccelTimestamp != null) {
-        final double dt =
-            now.difference(_lastAccelTimestamp!).inMicroseconds / 1e6;
-        if (dt > 0.01) {
-          final double jerk =
-              (_smoothedUiAcceleration - _lastLinearMagnitude!) / dt;
-          _jerkBuffer.add(TimeStampedValue(now, jerk));
-          _lastLinearMagnitude = _smoothedUiAcceleration;
-          _lastAccelTimestamp  = now;
-        }
-      } else {
-        _lastLinearMagnitude = _smoothedUiAcceleration;
-        _lastAccelTimestamp  = now;
+      if (_lastJerkMagnitude != null && _lastAccelTimestamp != null) {
+        final double dt = now.difference(_lastAccelTimestamp!).inMicroseconds / 1e6;
+        final double clampedDt = dt < 0.01 ? 0.01 : dt;
+        final double jerk = (jerkMagnitude - _lastJerkMagnitude!) / clampedDt;
+        _jerkBuffer.add(TimeStampedValue(now, jerk));
       }
+      _lastJerkMagnitude = jerkMagnitude;
+      _lastAccelTimestamp = now;
 
       // Purge jerk older than 1 s
       while (_jerkBuffer.isNotEmpty &&
@@ -566,7 +504,7 @@ class VehicleMonitorService {
         distanceFilter: 1,
       ),
     ).listen((position) {
-      _logger.logGps(position);
+      // _logger.logGps(position);
 
       if (position.accuracy > 50.0) {
         debugPrint('Ignoring poor GPS: ${position.accuracy}m');
@@ -576,7 +514,7 @@ class VehicleMonitorService {
       final DateTime now = DateTime.now();
       currentSpeedKmh = position.speed * 3.6;
 
-      // ── FIX C: GPS-speed deceleration detector ───────────────────────────
+      // ── GPS-speed deceleration detector ───────────────────────────
       if (!_isTrackMode) {
         _updateDecelStateFromGps(now);
       }
@@ -638,7 +576,7 @@ class VehicleMonitorService {
   }
 
   // ============================================================================
-  // FIX C: GPS-SPEED DECELERATION DETECTOR
+  // GPS-SPEED DECELERATION DETECTOR
   // ============================================================================
   void _updateDecelStateFromGps(DateTime now) {
     if (_speedHistory.length < 2) return;
@@ -676,20 +614,30 @@ class VehicleMonitorService {
         _gpsDecelConfirmCount = 0;
       }
     } else {
-      if (speedDerivKmhPerS >= -(_kGpsDecelThresholdKmhPerS * 0.5)) {
+      // EXIT logic with two tiers:
+      if (speedDerivKmhPerS > 1.0) {
+        // Tier 1: Speed clearly rising → immediate exit
+        _isDecelerating = false;
+        _gpsAccelConfirmCount = 0;
+        _gpsDecelConfirmCount = 0;
+        debugPrint('🟢 GPS speed rising — immediate DECEL exit');
+      } else if (speedDerivKmhPerS > -_kGpsDecelThresholdKmhPerS) {
+        // Tier 2: Not dropping fast → count toward gradual exit
         _gpsAccelConfirmCount++;
         _gpsDecelConfirmCount = 0;
         if (_gpsAccelConfirmCount >= _kGpsAccelConfirmSamples) {
-          _isDecelerating       = false;
+          _isDecelerating = false;
           _gpsAccelConfirmCount = 0;
-          debugPrint('🟢 GPS Accel confirmed — exiting DECEL mode');
+          debugPrint('🟢 GPS mild readings — gradual DECEL exit');
         }
       } else {
+        // Still strongly decelerating
         _gpsAccelConfirmCount = 0;
       }
 
+      // Force exit if nearly stopped
       if (currentSpeedKmh < _kMinSpeedForReversalKmh) {
-        _isDecelerating       = false;
+        _isDecelerating = false;
         _gpsDecelConfirmCount = 0;
         _gpsAccelConfirmCount = 0;
       }
@@ -1006,7 +954,7 @@ class VehicleMonitorService {
     _lastPosition = null;
     _isMonitoring = false;
 
-    await _logger.stopAndExport();
+    // await _logger.stopAndExport();
 
     try {
       await WakelockPlus.disable();

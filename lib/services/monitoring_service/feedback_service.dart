@@ -60,8 +60,8 @@ class FeedbackService {
 
   // Default thresholds (overwritten after history is loaded)
   double _avgYawRate = 0.5;   // rad/s
-  double _avgJerk = 2.5;      // m/s³
-  double _avgBrakeJerk = 2.5; // m/s³
+  double _avgJerk = 10.5;      // m/s³
+  double _avgBrakeJerk = 10.5; // m/s³
 
   // Historical profile data
   DriverProfile? _driverProfile;
@@ -71,7 +71,7 @@ class FeedbackService {
   DateTime? _lastAccelFeedback;
   DateTime? _lastBrakeFeedback;
   DateTime? _lastWeatherFeedback;
-  static const Duration _kFeedbackCooldown = Duration(seconds: 4);
+  static const Duration _kFeedbackCooldown = Duration(seconds: 10);
 
   // ============================================================
   // INITIALISATION
@@ -110,11 +110,11 @@ class FeedbackService {
         (session['metrics']['avgHarshEventsPerMin'] ?? 0.0).toDouble();
 
         if (harshRate > 0.5) {
-          totalAccel += 3.5; // Higher jerk tolerance for aggressive drivers
-          totalBrake += 3.5;
+          totalAccel += 12.0; // Higher jerk tolerance for aggressive drivers
+          totalBrake += 12.0;
         } else {
-          totalAccel += 2.5; // Tighter jerk tolerance for smooth drivers
-          totalBrake += 2.5;
+          totalAccel += 10.5; // Tighter jerk tolerance for smooth drivers
+          totalBrake += 10.5;
         }
         count++;
       }
@@ -283,16 +283,17 @@ class FeedbackService {
   // PUBLIC EVALUATE METHODS
   // ============================================================
 
-  // ✅ FIX: All evaluate methods now properly await _emitFeedback() so the
-  //    async TTS chain (triggerFeedback inside _emitFeedback) is not orphaned.
-
   Future<void> evaluateTurn(double yawRate, double speedKmh) async {
-    if (yawRate.abs() < _avgYawRate * 1.2) return;
-    if (!_canTrigger(_lastTurnFeedback)) return;
+    if (yawRate.abs() < _avgYawRate * 1.15) return;
+
+    final severity = ((yawRate.abs() - _avgYawRate) / 0.8).clamp(0.0, 1.0);
+
+    // FIX: High severity (>0.8) bypasses the cooldown check so dangerous turns are never ignored
+    final isHighSeverity = severity > 0.8;
+    if (!_canTrigger(_lastTurnFeedback, isHighSeverity)) return;
 
     _lastTurnFeedback = DateTime.now();
 
-    final severity = (yawRate.abs() / 1.5).clamp(0.0, 1.0);
     final String msg =
     speedKmh > 50 ? 'Taking that turn a bit fast!' : 'Sharp turn detected.';
     final String recommendation =
@@ -308,12 +309,16 @@ class FeedbackService {
   }
 
   Future<void> evaluateAcceleration(double jerkStdDev, double speedKmh) async {
-    if (jerkStdDev < _avgJerk * 1.2) return;
-    if (!_canTrigger(_lastAccelFeedback)) return;
+    if (jerkStdDev < _avgJerk * 1.15) return;
+
+    final severity = ((jerkStdDev - _avgJerk) / 10.0).clamp(0.0, 1.0);
+
+    // FIX: High severity bypasses the cooldown check
+    final isHighSeverity = severity > 0.8;
+    if (!_canTrigger(_lastAccelFeedback, isHighSeverity)) return;
 
     _lastAccelFeedback = DateTime.now();
 
-    final severity = (jerkStdDev / 6.0).clamp(0.0, 1.0);
     final String recommendation =
     _getPersonalizedRecommendation(FeedbackCategory.throttling, severity);
 
@@ -327,12 +332,16 @@ class FeedbackService {
   }
 
   Future<void> evaluateBraking(double jerkStdDev, double speedKmh) async {
-    if (jerkStdDev < _avgBrakeJerk * 1.2) return;
-    if (!_canTrigger(_lastBrakeFeedback)) return;
+    if (jerkStdDev < _avgBrakeJerk * 1.15) return;
+
+    final severity = ((jerkStdDev - _avgBrakeJerk) / 10.0).clamp(0.0, 1.0);
+
+    // FIX: High severity bypasses the cooldown check
+    final isHighSeverity = severity > 0.8;
+    if (!_canTrigger(_lastBrakeFeedback, isHighSeverity)) return;
 
     _lastBrakeFeedback = DateTime.now();
 
-    final severity = (jerkStdDev / 6.0).clamp(0.0, 1.0);
     final String recommendation =
     _getPersonalizedRecommendation(FeedbackCategory.braking, severity);
 
@@ -345,13 +354,17 @@ class FeedbackService {
     );
   }
 
-  bool _canTrigger(DateTime? lastTime) {
+  bool _canTrigger(DateTime? lastTime, bool isHighSeverity) {
     if (lastTime == null) return true;
-    return DateTime.now().difference(lastTime) > _kFeedbackCooldown;
+    final elapsed = DateTime.now().difference(lastTime);
+    if (isHighSeverity) {
+      return elapsed > const Duration(seconds: 3); // Prevent TTS stutter during a single harsh event
+    }
+    return elapsed > _kFeedbackCooldown;
   }
 
   Future<void> evaluateWeather(WidgetRef ref) async {
-    if (!_canTrigger(_lastWeatherFeedback)) return;
+    if (!_canTrigger(_lastWeatherFeedback, false)) return;
 
     try {
       final Position position = await _determinePosition();
@@ -435,11 +448,6 @@ class FeedbackService {
     return Geolocator.getCurrentPosition();
   }
 
-  // ✅ FIX: Changed from `void` to `Future<void>` and made async so that
-  //    `await _coachingService.triggerFeedback(...)` is properly awaited.
-  //    Previously this was a sync void method, meaning triggerFeedback() was
-  //    called as a fire-and-forget Future — if anything failed in the async
-  //    TTS chain there was no error surface and voice silently dropped.
   Future<void> _emitFeedback({
     required FeedbackCategory category,
     required double severity,
@@ -457,7 +465,6 @@ class FeedbackService {
 
     _feedbackController.add(feedback);
 
-    // ✅ Properly awaited — TTS Future is no longer orphaned
     await _coachingService.triggerFeedback(
       message: '$message $recommendation',
       vibrationPattern: vibrationPattern,
