@@ -96,12 +96,8 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Get the exact height of the keyboard
-    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-
     return Scaffold(
-      // CRITICAL FIX: Turn off automatic resizing so we can handle it manually
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text("AI Mechanic"),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
@@ -109,11 +105,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
       ),
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Padding(
-        padding: EdgeInsets.only(
-          // If the keyboard is open, push up by the EXACT height of the keyboard.
-          // Otherwise, apply your original 70.r padding for the nav bar.
-          bottom: keyboardHeight > 0 ? keyboardHeight : 70.r,
-        ),
+        padding: EdgeInsets.only(bottom: 70.r),
         child: Chat(
           messages: _messages,
           onSendPressed: _handleUserMessage,
