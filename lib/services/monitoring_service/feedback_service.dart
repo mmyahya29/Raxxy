@@ -8,7 +8,7 @@ import '../../Models/weather_model.dart';
 import '../../providers/provider.dart';
 import '../../providers/weather_api_provider.dart';
 
-enum FeedbackCategory { turn, throttling, braking, speeding, smoothness, weather }
+enum FeedbackCategory { turn, throttling, braking, speeding, smoothness, weather, riskAlert }
 
 class DriverFeedback {
   final FeedbackCategory category;
@@ -71,6 +71,7 @@ class FeedbackService {
   DateTime? _lastAccelFeedback;
   DateTime? _lastBrakeFeedback;
   DateTime? _lastWeatherFeedback;
+  DateTime? _lastRiskFeedback; // GAP-2: dedicated cooldown, separate from weather
   static const Duration _kFeedbackCooldown = Duration(seconds: 10);
 
   // ============================================================
@@ -283,21 +284,28 @@ class FeedbackService {
   // PUBLIC EVALUATE METHODS
   // ============================================================
 
-  Future<void> evaluateTurn(double yawRate, double speedKmh) async {
-    if (yawRate.abs() < _avgYawRate * 1.15) return;
+  /// BUG-1 FIX: Accepts [personalizedYawThreshold] from VehicleMonitorService
+  /// so the per-driver _yawMultiplier is properly honoured here.
+  Future<void> evaluateTurn(
+    double yawRate,
+    double speedKmh, {
+    double? personalizedYawThreshold,
+  }) async {
+    final double gate = personalizedYawThreshold ?? (_avgYawRate * 1.15);
+    if (yawRate.abs() < gate) return;
 
     final severity = ((yawRate.abs() - _avgYawRate) / 0.8).clamp(0.0, 1.0);
 
-    // FIX: High severity (>0.8) bypasses the cooldown check so dangerous turns are never ignored
+    // High severity (>0.8) bypasses the cooldown so dangerous turns are never ignored
     final isHighSeverity = severity > 0.8;
     if (!_canTrigger(_lastTurnFeedback, isHighSeverity)) return;
 
     _lastTurnFeedback = DateTime.now();
 
     final String msg =
-    speedKmh > 50 ? 'Taking that turn a bit fast!' : 'Sharp turn detected.';
+        speedKmh > 50 ? 'Taking that turn a bit fast!' : 'Sharp turn detected.';
     final String recommendation =
-    _getPersonalizedRecommendation(FeedbackCategory.turn, severity);
+        _getPersonalizedRecommendation(FeedbackCategory.turn, severity);
 
     await _emitFeedback(
       category: FeedbackCategory.turn,
@@ -414,17 +422,21 @@ class FeedbackService {
     }
   }
 
+  /// GAP-2 FIX: Uses its own [_lastRiskFeedback] cooldown instead of sharing
+  /// the weather cooldown, preventing mutual suppression.
   Future<void> evaluateAccidentRisk(
       String currentRiskLevel, double currentRiskScore) async {
-    if (currentRiskLevel == 'High') {
-      await _emitFeedback(
-        category: FeedbackCategory.weather,
-        severity: 0.7,
-        message: 'High accident risk detected.',
-        recommendation: 'Try to lower your speed to reduce risk.',
-        vibrationPattern: [0, 300, 100, 300],
-      );
-    }
+    if (currentRiskLevel != 'High') return;
+    if (!_canTrigger(_lastRiskFeedback, false)) return;
+    _lastRiskFeedback = DateTime.now();
+
+    await _emitFeedback(
+      category: FeedbackCategory.riskAlert,
+      severity: 0.7,
+      message: 'High accident risk detected.',
+      recommendation: 'Try to lower your speed to reduce risk.',
+      vibrationPattern: [0, 300, 100, 300],
+    );
   }
 
   // ============================================================

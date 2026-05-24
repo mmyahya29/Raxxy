@@ -203,6 +203,11 @@ class VehicleMonitorService {
     required WidgetRef    ref,
     bool                  trackMode = false,
   }) async {
+    // BUG-4 FIX: Guard moved to the very top before any async work so a
+    // double-tap cannot spawn orphan Firestore reads or a double TTS init.
+    if (_isMonitoring) return;
+    _isMonitoring = true;
+
     _t           = ref.read(sensorThresholdsProvider);
     _isTrackMode = trackMode;
 
@@ -229,8 +234,6 @@ class VehicleMonitorService {
     _gpsDecelConfirmCount = 0;
     _gpsAccelConfirmCount = 0;
 
-    if (_isMonitoring) return;
-    _isMonitoring      = true;
     _userId            = userId;
     _vehicleId         = vehicleId;
     _monitoringContext = context;
@@ -323,10 +326,9 @@ class VehicleMonitorService {
                   _shouldSendHaptic(_lastHarshAccelNotification)) {
                 _sessionService.incrementHarshAccel();
                 _lastHarshAccelNotification = DateTime.now();
-                _coachingService.triggerFeedback(
-                  message: 'Easy on the gas!',
-                  vibrationPattern: [0, 200, 100, 200],
-                );
+                // BUG-2 FIX: Do NOT call _coachingService directly here.
+                // FeedbackService._emitFeedback() already calls CoachingService
+                // internally, so a direct call here causes double TTS + haptic.
                 _feedbackService.evaluateAcceleration(jerkStdDev, currentSpeedKmh);
                 debugPrint('🟢 Harsh ACCEL (JerkStdDev): ${jerkStdDev.toStringAsFixed(2)} m/s³');
                 _consecutiveHarshAccel = 0;
@@ -341,10 +343,7 @@ class VehicleMonitorService {
                   _shouldSendHaptic(_lastHarshBrakeNotification)) {
                 _sessionService.incrementHarshBrake();
                 _lastHarshBrakeNotification = DateTime.now();
-                _coachingService.triggerFeedback(
-                  message: 'Easy on the brakes!',
-                  vibrationPattern: [0, 500, 100, 300],
-                );
+                // BUG-2 FIX: Same as above — FeedbackService handles CoachingService.
                 _feedbackService.evaluateBraking(jerkStdDev, currentSpeedKmh);
                 debugPrint('🔴 Harsh BRAKE (JerkStdDev): ${jerkStdDev.toStringAsFixed(2)} m/s³');
                 _consecutiveHarshBrake = 0;
@@ -857,7 +856,13 @@ class VehicleMonitorService {
 
         _analyzeTurnQuality(
             _turnEntrySpeed ?? currentSpeedKmh, currentSpeedKmh, _turnPeakYawRate);
-        _feedbackService.evaluateTurn(_turnPeakYawRate, currentSpeedKmh);
+        // BUG-1 FIX: Forward the personalised yaw gate so FeedbackService
+        // respects _yawMultiplier rather than its hardcoded 1.15x fallback.
+        _feedbackService.evaluateTurn(
+          _turnPeakYawRate,
+          currentSpeedKmh,
+          personalizedYawThreshold: _t.yawRateThreshold * _yawMultiplier,
+        );
 
         debugPrint(
           '🔄 Turn: $direction | Peak: ${_turnPeakYawRate.toStringAsFixed(2)} rad/s | '
