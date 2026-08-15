@@ -37,13 +37,20 @@ flutter pub get
 
 ### 3. Configure environment variables
 
-Copy the example environment file and fill in your own values:
+To use the AI Mechanic feature, you will need a Groq API key. Follow these steps:
 
-```bash
-cp raxxy.env.example raxxy.env
-```
+1. Create a file named `raxxy.env` in the root directory of the project (at the same level as `pubspec.yaml`).
+2. Add your Groq API key to this file like so:
+   ```env
+   API_KEY=your_actual_groq_api_key_here
+   ```
+3. Alternatively, you can copy the example environment file:
+   ```bash
+   cp raxxy.env.example raxxy.env
+   ```
+   And then edit the `raxxy.env` file to include your API key.
 
-Then edit `raxxy.env` with your actual API keys (see [`raxxy.env.example`](raxxy.env.example) for the list of required variables). **Never commit `raxxy.env`** – it is already listed in `.gitignore`.
+**Never commit `raxxy.env`** – it contains sensitive keys and is already listed in `.gitignore`.
 
 ### 4. Required permissions
 
