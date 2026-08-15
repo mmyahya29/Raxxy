@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 class SessionSummaryService {
   // Session tracking variables
@@ -61,7 +62,11 @@ class SessionSummaryService {
     _moderateTimeSeconds = 0;
     _fastTimeSeconds = 0;
 
-    print('📊 Session started at $_sessionStart');
+    _smoothTurns = 0;   // BUG-4 FIX: reset turn quality counters each session
+    _jerkyTurns = 0;
+    _normalTurns = 0;
+
+    debugPrint('📊 Session started at $_sessionStart');
   }
 
   void recordTurnQuality(String quality) {
@@ -103,10 +108,10 @@ class SessionSummaryService {
     // Detect state switches
     if (_lastState == "accel" && newState == "decel") {
       _accelToDecelSwitches++;
-      print("🔄 Switch: Acceleration → Deceleration (Total: $_accelToDecelSwitches)");
+      debugPrint("🔄 Switch: Acceleration → Deceleration (Total: $_accelToDecelSwitches)");
     } else if (_lastState == "decel" && newState == "accel") {
       _decelToAccelSwitches++;
-      print("🔄 Switch: Deceleration → Acceleration (Total: $_decelToAccelSwitches)");
+      debugPrint("🔄 Switch: Deceleration → Acceleration (Total: $_decelToAccelSwitches)");
     }
 
     _lastState = newState;
@@ -210,9 +215,9 @@ class SessionSummaryService {
     double highwayProbability = (highwayScore / totalScore).clamp(0.0, 1.0);
     double cityProbability = (cityScore / totalScore).clamp(0.0, 1.0);
 
-    print('🛣️ Session Type Analysis:');
-    print('   Highway Score: ${highwayScore.toStringAsFixed(1)}, Probability: ${(highwayProbability * 100).toStringAsFixed(1)}%');
-    print('   City Score: ${cityScore.toStringAsFixed(1)}, Probability: ${(cityProbability * 100).toStringAsFixed(1)}%');
+    debugPrint('🛣️ Session Type Analysis:');
+    debugPrint('   Highway Score: ${highwayScore.toStringAsFixed(1)}, Probability: ${(highwayProbability * 100).toStringAsFixed(1)}%');
+    debugPrint('   City Score: ${cityScore.toStringAsFixed(1)}, Probability: ${(cityProbability * 100).toStringAsFixed(1)}%');
 
     return {
       'highwayProbability': highwayProbability,
@@ -232,6 +237,14 @@ class SessionSummaryService {
     final probabilities = _calculateSessionTypeProbabilities(
       avgSpeed: avgSpeed,
       totalSwitches: totalSwitches,
+      durationMinutes: durationMinutes,
+    );
+
+    // BUG-3 FIX: Compute safetyScore so FeedbackService can personalize
+    // weather recommendations based on actual driver skill, not a missing field.
+    final safetyScore = _calculateSessionSafetyScore(
+      harshEvents: _harshAccelEvents + _harshBrakeEvents,
+      maxSpeedKmh: _maxSpeed,
       durationMinutes: durationMinutes,
     );
 
@@ -286,18 +299,43 @@ class SessionSummaryService {
       // Derived metrics
       'harshEventsPerMinute': durationMinutes > 0 ? double.parse(((_harshAccelEvents + _harshBrakeEvents) / durationMinutes).toStringAsFixed(2)) : 0.0,
       'turnsPerMinute': durationMinutes > 0 ? double.parse(((_leftTurns + _rightTurns) / durationMinutes).toStringAsFixed(2)) : 0.0,
+
+      // BUG-3 FIX: safetyScore persisted so FeedbackService weather coaching
+      // can personalise its recommendation tier correctly.
+      'safetyScore': safetyScore,
     };
 
-    print('📊 Session Summary Generated:');
-    print('   Duration: $durationMinutes min ($durationSeconds sec)');
-    print('   Distance: ${totalDistanceKm.toStringAsFixed(2)} km');
-    print('   Avg Speed: ${avgSpeed.toStringAsFixed(1)} km/h (Min: ${summary['minSpeedKmh']}, Max: ${summary['maxSpeedKmh']})');
-    print('   Harsh Events: $_harshAccelEvents accel, $_harshBrakeEvents brakes');
-    print('   Turns: $_leftTurns left, $_rightTurns right');
-    print('   Switches: $totalSwitches total (${summary['switchesPerMinute']}/min)');
-    print('   Session Type: ${(probabilities['highwayProbability']! * 100).toStringAsFixed(0)}% Highway, ${(probabilities['cityProbability']! * 100).toStringAsFixed(0)}% City');
+    debugPrint('📊 Session Summary Generated:');
+    debugPrint('   Duration: $durationMinutes min ($durationSeconds sec)');
+    debugPrint('   Distance: ${totalDistanceKm.toStringAsFixed(2)} km');
+    debugPrint('   Avg Speed: ${avgSpeed.toStringAsFixed(1)} km/h (Min: ${summary['minSpeedKmh']}, Max: ${summary['maxSpeedKmh']})');
+    debugPrint('   Harsh Events: $_harshAccelEvents accel, $_harshBrakeEvents brakes');
+    debugPrint('   Turns: $_leftTurns left, $_rightTurns right');
+    debugPrint('   Switches: $totalSwitches total (${summary["switchesPerMinute"]}/min)');
+    debugPrint('   Session Type: ${(probabilities["highwayProbability"]! * 100).toStringAsFixed(0)}% Highway, ${(probabilities["cityProbability"]! * 100).toStringAsFixed(0)}% City');
+    debugPrint('   Safety Score: ${safetyScore.toStringAsFixed(1)}');
 
     return summary;
+  }
+
+  /// BUG-3 FIX: Calculates a per-session safety score (0–100) that mirrors
+  /// the rough logic in [DriverProfileService._calculateProfileScores] so that
+  /// [FeedbackService._buildDriverProfile] receives a non-zero value and can
+  /// correctly tier its personalized weather recommendations.
+  double _calculateSessionSafetyScore({
+    required int harshEvents,
+    required double maxSpeedKmh,
+    required int durationMinutes,
+  }) {
+    double score = 100.0;
+    // Deduct for harsh events (capped at 40 pts)
+    score -= (harshEvents * 5.0).clamp(0.0, 40.0);
+    // Deduct for excessive speed
+    if (maxSpeedKmh > 100) score -= 20.0;
+    else if (maxSpeedKmh > 80) score -= 10.0;
+    // Slight deduction for very short sessions (too little data to be meaningful)
+    if (durationMinutes < 2) score -= 10.0;
+    return score.clamp(0.0, 100.0);
   }
 
   /// Save session summary to Firestore
@@ -316,9 +354,9 @@ class SessionSummaryService {
           .collection('sessions')
           .add(summary);
 
-      print('✅ Session summary saved to Firestore');
+      debugPrint('✅ Session summary saved to Firestore');
     } catch (e) {
-      print('❌ Failed to save session summary: $e');
+      debugPrint('❌ Failed to save session summary: $e');
       rethrow;
     }
   }

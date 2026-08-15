@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:math';
 
 class DriverProfileService {
@@ -66,7 +67,7 @@ class DriverProfileService {
         'lastAnalyzed': Timestamp.now(),
       };
     } catch (e) {
-      print('❌ Error analyzing driver profile: $e');
+      debugPrint('❌ Error analyzing driver profile: $e');
       return getDefaultProfile();
     }
   }
@@ -88,7 +89,7 @@ class DriverProfileService {
 
       return sessionsSnapshot.docs.map((doc) => doc.data()).toList();
     } catch (e) {
-      print('❌ Error fetching last sessions: $e');
+      debugPrint('❌ Error fetching last sessions: $e');
       return [];
     }
   }
@@ -615,9 +616,9 @@ class DriverProfileService {
           .doc(userId)
           .set({'driverProfile': profile}, SetOptions(merge: true));
 
-      print('✅ Driver profile saved successfully');
+      debugPrint('✅ Driver profile saved successfully');
     } catch (e) {
-      print('❌ Failed to save driver profile: $e');
+      debugPrint('❌ Failed to save driver profile: $e');
       rethrow;
     }
   }
@@ -632,7 +633,7 @@ class DriverProfileService {
       }
       return null;
     } catch (e) {
-      print('❌ Failed to get cached profile: $e');
+      debugPrint('❌ Failed to get cached profile: $e');
       return null;
     }
   }
