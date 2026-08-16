@@ -5,6 +5,7 @@ import '../Models/weather_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'weather_api_provider.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 
 
@@ -22,7 +23,7 @@ final weatherProvider = FutureProvider.family<FullWeatherData, ({double lat, dou
 );
 
 class WeatherRepository {
-  final String apiKey = 'YOUR_OPENWEATHER_API_KEY';
+  final String apiKey = dotenv.env['WEATHER_API_KEY'] ?? '';
   final String baseUrl = 'https://api.openweathermap.org/data/2.5';
 
   Future<FullWeatherData> fetchWeather(double lat, double lon) async {
